@@ -239,6 +239,7 @@ Etsy portal/
 │   └── src/
 │       ├── index.js          local node:http server, static client, error handler
 │       ├── api.js            the route table, shared by both runtimes
+│       ├── auth.js           portal password, session cookie and the sign-in guard
 │       ├── config.js         env parsing + requireKey()
 │       ├── apikeys.js        saved keys, brand and the grouped provider/model choice
 │       ├── modelCatalog.js   reads server/models.json on every request
@@ -267,7 +268,7 @@ Etsy portal/
         ├── App.jsx           state, loading banners, error banners
         ├── api.js            fetch wrapper + the polling loop
         ├── labels.js         status labels
-        └── components/       ProductForm, Workspace, TextPreview,
+        └── components/       Login, ProductForm, Workspace, TextPreview,
                               UploadSlots, PackagePanel, HistoryView, SettingsView
 ```
 
@@ -277,6 +278,10 @@ Etsy portal/
 
 | Method | Path | Purpose |
 |--------|------|---------|
+| GET | `/api/auth/status` | is a password set, and is this browser signed in |
+| POST | `/api/auth/login` | verify the password and set the session cookie |
+| POST | `/api/auth/logout` | clear the session cookie |
+| PUT | `/api/auth/password` | create the password (first time) or change it (needs the old one) |
 | GET | `/api/health` | which provider is asked first, and whether any key is missing at all |
 | GET | `/api/products` | history list |
 | POST | `/api/products` | create a product and queue its listing text |
@@ -297,12 +302,26 @@ Etsy portal/
 | PUT | `/api/settings/brand` | save the brand name used in PDFs and prompts |
 | DELETE | `/api/settings/brand` | reset the brand name to the built-in placeholder |
 
+Everything except the four `/api/auth/*` routes needs the `listing_session` cookie as soon as a
+password exists. Hosted, there is no way round that: a deployment with no password yet answers every
+other endpoint with 401 until the first screen creates one.
+
 ---
 
 ## 8. Troubleshooting
 
 **"Cannot reach the server. Is the backend running on port 4000?"**
 Start the backend (setup step 4). The frontend proxies `/api` to `http://localhost:4000`.
+
+**"Sign in to use this portal."**
+The password screen is up because a password is set (or this copy is hosted). Five wrong tries in a
+row adds a 60-second wait before the next one is even checked.
+
+**I forgot the portal password**
+There is no email reset, by design: the only record of it is the hash in your own database. Locally,
+start the backend and run `node -e "import('./src/db.js').then(m => m.deleteSetting('auth.password'))"`
+from `server/` to clear it, then set a new one on the next screen. On Netlify, delete the
+`auth.password` row in the database's table view and reload the site.
 
 **"Could not connect to MySQL" on startup**
 1. Open XAMPP Control Panel → **Start** next to MySQL.
@@ -393,8 +412,13 @@ publishes it, so changes made here appear on the site without any manual step.
 | PDFs, uploaded images, ZIPs | Netlify Blobs store `listing-files`, under `products/<id>/…` |
 | API keys | **Settings → Access keys** in the deployed app, which stores them in your database, or site secrets for `GEMINI_API_KEY` / `GROQ_API_KEY` |
 
-Three consequences of serverless hosting, both enforced by the app rather than left to fail:
+What changes when it is hosted:
 
+- **You sign in with a portal password.** A hosted build is locked before the password exists: the
+  first screen asks you to create one, and after that every page, download and API call needs the
+  session cookie it hands out. Netlify's own site-password feature is not on the free plan, so the
+  gate lives in the app. Locally the portal stays open until you create a password yourself in
+  **Settings → Portal password**.
 - **Uploads are capped near 4 MB**, because one Function invocation cannot carry the 25 MB a local
   disk accepts. Compress the image, or run the portal on your own machine for full-resolution files.
 - **The private files stay private.** `masterPrompt.js`, `rules.js` and `.env` are git-ignored, so a
@@ -402,6 +426,26 @@ Three consequences of serverless hosting, both enforced by the app rather than l
   build. Edit your own wording locally; publish only the tool.
 - **Brand and keys are per-database.** A fresh deployment has the neutral placeholder brand and no
   keys; set them once in the deployed Settings and they are stored in that deployment's database.
+  Your local MySQL rows never travel to the site, and the git repository never sees any of them.
+
+### What it costs
+
+Netlify's free plan is credit-based now: 300 credits a month, and the meter you will actually see is
+
+| What | Free allowance | Credits |
+|------|----------------|---------|
+| A production deploy (every push, with auto-deploy on) | shared pool | 15 each, so about 20 pushes a month |
+| Function execution | shared pool | 10 per GB-hour; a 60-second generation is roughly 0.2 |
+| Bandwidth | shared pool | 20 per GB out |
+| Netlify Database | 3 databases, 5 GB storage, 5 GB transfer, 48 DB compute units per period | no charge inside it |
+| Blobs | included on the free plan; the docs do not publish a separate storage figure | small |
+
+A few listings a day uses almost none of that. The push-equals-deploy rule is the expensive part, so
+push when a change is finished rather than after every edit — or turn auto-deploy off in
+**Site configuration → Build & deployment** and deploy by hand.
+
+Exceeding 300 credits pauses the site rather than billing you, because the free plan has no
+auto-recharge. Nothing here needs a card until you outgrow it.
 
 ---
 

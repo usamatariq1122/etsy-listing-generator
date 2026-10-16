@@ -5,6 +5,7 @@ import ProductForm from './components/ProductForm.jsx';
 import Workspace from './components/Workspace.jsx';
 import HistoryView from './components/HistoryView.jsx';
 import SettingsView from './components/SettingsView.jsx';
+import Login from './components/Login.jsx';
 
 // Anything here means the fix is a fresh API key, so offer the Settings panel.
 const KEY_PROBLEM = /quota|rate limit|429|api key|insufficient|billing/i;
@@ -26,10 +27,33 @@ export default function App() {
   const [health, setHealth] = useState(null);
   const [settings, setSettings] = useState(null);
   const [history, setHistory] = useState([]);
+  const [session, setSession] = useState(null);
 
-  useEffect(() => {
+  const loadHealth = useCallback(() => {
     api.health().then(setHealth).catch(() => setHealth(null));
   }, []);
+
+  const refreshAuth = useCallback(async () => {
+    try {
+      const status = await api.authStatus();
+      setSession(status);
+      if (status.signedIn) loadHealth();
+      return status;
+    } catch (err) {
+      setSession({ protected: true, signedIn: false, lockedFor: 0, offline: err.message });
+      return null;
+    }
+  }, [loadHealth]);
+
+  useEffect(() => {
+    refreshAuth();
+  }, [refreshAuth]);
+
+  /** Any 401 means the cookie died mid-session, so bring the sign-in back. */
+  function catch401(err) {
+    if (err?.status === 401) refreshAuth();
+    setError(err);
+  }
 
   const refreshSettings = useCallback(async () => {
     try {
@@ -64,7 +88,7 @@ export default function App() {
     try {
       return await fn();
     } catch (err) {
-      setError(err);
+      catch401(err);
       return null;
     } finally {
       setBusy(null);
@@ -102,7 +126,7 @@ export default function App() {
       setNotice(textNotice(product, label === 'Rewriting the listing text'));
       return product;
     } catch (err) {
-      setError(err);
+      catch401(err);
       return null;
     } finally {
       setBusy(null);
@@ -190,7 +214,7 @@ export default function App() {
     if (data) {
       setSettings(data);
       setNotice(`${providerLabel(provider)} API key saved. The next generation uses it straight away.`);
-      api.health().then(setHealth).catch(() => setHealth(null));
+      loadHealth();
     }
   }
 
@@ -200,7 +224,7 @@ export default function App() {
     if (data) {
       setSettings(data);
       setNotice(`Saved ${providerLabel(provider)} key removed.`);
-      api.health().then(setHealth).catch(() => setHealth(null));
+      loadHealth();
     }
   }
 
@@ -219,6 +243,25 @@ export default function App() {
       setNotice(`Guides and PDFs will now be signed as ${brand}.`);
     }
   }
+
+  async function handleChangePassword(current, next) {
+    const data = await run('Saving password', null, () => api.savePassword(next, current));
+    if (data) {
+      setSettings(data);
+      setNotice('Password saved. Other browsers signed in with this portal have been signed out.');
+    }
+  }
+
+  async function signOut() {
+    await run('Signing out', null, () => api.logout());
+    refreshAuth();
+    setProduct(null);
+  }
+
+  // The whole portal is behind the password, so nothing else is fetched until
+  // the session is confirmed.
+  if (!session) return <div className="app"><main><p className="muted">Checking your sign-in…</p></main></div>;
+  if (!session.signedIn) return <Login status={session} onSignedIn={refreshAuth} />;
 
   // The short-guide warning travels with the product, so it survives a reload.
   const quality = view === 'studio' && product ? product.warnings?.quality : null;
@@ -246,6 +289,11 @@ export default function App() {
           >
             Settings
           </button>
+          {session.protected && (
+            <button className="nav" onClick={signOut} disabled={Boolean(busy)}>
+              Sign out
+            </button>
+          )}
         </nav>
       </header>
 
@@ -318,6 +366,7 @@ export default function App() {
             onRemove={handleRemoveKey}
             onSaveModel={handleSaveModel}
             onSaveBrand={handleSaveBrand}
+            onChangePassword={handleChangePassword}
           />
         ) : view === 'history' ? (
           <HistoryView

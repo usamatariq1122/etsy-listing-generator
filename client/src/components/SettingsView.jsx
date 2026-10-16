@@ -78,7 +78,57 @@ function KeyRow({ provider, info, busy, onSave, onRemove }) {
   );
 }
 
-export default function SettingsView({ settings, busy, onSave, onRemove, onSaveModel, onSaveBrand }) {
+function PasswordRow({ onChange, busy, configured }) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [repeat, setRepeat] = useState('');
+  const [error, setError] = useState('');
+
+  function submit(event) {
+    event.preventDefault();
+    if (configured && !current) return setError('Enter your current password.');
+    if (next.length < 8) return setError('The password needs at least 8 characters.');
+    if (next !== repeat) return setError('Both entries must match.');
+    setError('');
+    onChange(current, next);
+    setCurrent('');
+    setNext('');
+    setRepeat('');
+  }
+
+  return (
+    <form onSubmit={submit} className="stack">
+      {configured && (
+        <label className="field">
+          <span>Current password</span>
+          <input type="password" value={current} autoComplete="current-password" onChange={(e) => setCurrent(e.target.value)} disabled={Boolean(busy)} />
+        </label>
+      )}
+      <div className="row">
+        <label className="field">
+          <span>{configured ? 'New password' : 'Password'}</span>
+          <input type="password" value={next} autoComplete="new-password" onChange={(e) => setNext(e.target.value)} disabled={Boolean(busy)} />
+        </label>
+        <label className="field">
+          <span>Repeat it</span>
+          <input type="password" value={repeat} autoComplete="new-password" onChange={(e) => setRepeat(e.target.value)} disabled={Boolean(busy)} />
+        </label>
+      </div>
+      {error && <p className="inline-error">{error}</p>}
+      <div className="row">
+        <button
+          type="submit"
+          className="primary"
+          disabled={Boolean(busy) || !next || !repeat || (configured && !current)}
+        >
+          {configured ? 'Change password' : 'Create password'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export default function SettingsView({ settings, busy, onSave, onRemove, onSaveModel, onSaveBrand, onChangePassword }) {
   const [brandDraft, setBrandDraft] = useState(null);
   const [localError, setLocalError] = useState('');
 
@@ -89,6 +139,7 @@ export default function SettingsView({ settings, busy, onSave, onRemove, onSaveM
   const selected = settings.selected || {};
   const labelFor = (provider) => groups.find((group) => group.provider === provider)?.label || providerLabel(provider);
   const savedBrand = settings.brand || '';
+  const configured = Boolean(settings.passwordSet);
   const brand = brandDraft ?? savedBrand;
   const brandDirty = brand.trim() !== savedBrand && brand.trim().length > 0;
 
@@ -194,6 +245,20 @@ export default function SettingsView({ settings, busy, onSave, onRemove, onSaveM
           Keys are stored in this computer&apos;s database and used from the next request onwards, so no
           restart is needed. Only their last 4 characters are ever shown.
         </p>
+      </section>
+
+      <section className="card">
+        <h2>Portal password</h2>
+        <p className="muted small">
+          {configured
+            ? 'Every page and every download needs this password, so nobody else can run up your Gemini and Groq limits on your keys. Only a salted hash is stored. Changing it signs out any other browser.'
+            : 'No password yet, so this portal is open to anyone who reaches its address. Once you host it, the first screen you see asks for one - every page and every download then needs it, and only a salted hash is stored.'}
+        </p>
+        {onChangePassword ? (
+          <PasswordRow onChange={onChangePassword} busy={busy} configured={configured} />
+        ) : (
+          <p className="muted small">Loading…</p>
+        )}
       </section>
     </>
   );

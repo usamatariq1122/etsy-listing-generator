@@ -18,6 +18,19 @@ import { buildZip, documentBytes } from './zip.js';
 import { startGeneration } from './generate.js';
 import { keyCoverage, keyIssues, keyStatus, removeKey, removeModel, saveKey, saveModel } from './apikeys.js';
 import { brandIssues, clearBrand, saveBrand } from './brand.js';
+import {
+  clearFailures,
+  createSession,
+  lockedFor,
+  noteFailure,
+  passwordConfigured,
+  passwordProblem,
+  readSession,
+  sessionCookie,
+  setPassword,
+  validSession,
+  verifyPassword,
+} from './auth.js';
 
 // One router, two runtimes: the local node:http server and a Netlify Function
 // both hand it the same plain request shape and get the same plain response.
@@ -114,6 +127,51 @@ async function finished(id) {
 }
 
 const routes = [
+  // The only three ways in. Everything else needs the session cookie one of
+  // them handed out, because every generation spends your API quota.
+  { method: 'GET', pattern: '/auth/status', public: true, handler: async (ctx) => {
+      const configured = await passwordConfigured();
+      const checked = Boolean(ctx.session) && (await validSession(ctx.session));
+      // An unlocked local build is simply signed in, so the studio behaves the
+      // way it always did until a password exists or the portal goes online.
+      return json({
+        protected: configured,
+        signedIn: configured || onNetlify() ? checked : true,
+        lockedFor: await lockedFor(),
+      });
+    } },
+
+  { method: 'POST', pattern: '/auth/login', public: true, handler: async (ctx) => {
+      const waiting = await lockedFor();
+      if (waiting) throw new HttpError(`Too many tries. Wait ${waiting} second${waiting === 1 ? '' : 's'} and try again.`, 429);
+      if (!(await verifyPassword(String(ctx.body?.password ?? '')))) {
+        const seconds = await noteFailure();
+        throw new HttpError(seconds ? `Wrong password, and that was the last try for ${seconds} seconds.` : 'Wrong password.', 401);
+      }
+      await clearFailures();
+      return { ...json({ signedIn: true }), cookie: sessionCookie(await createSession()) };
+    } },
+
+  { method: 'POST', pattern: '/auth/logout', public: true, handler: async () =>
+      ({ ...json({ signedOut: true }), cookie: sessionCookie('', 0) }) },
+
+  // Creates the password the first time (nothing to prove) and changes it after
+  // that, which needs both the old password and a live session.
+  { method: 'PUT', pattern: '/auth/password', public: true, handler: async (ctx) => {
+      const firstTime = !(await passwordConfigured());
+      if (!firstTime && !(await validSession(ctx.session))) throw new HttpError('Sign in before changing the password.', 401);
+      if (!firstTime && !(await verifyPassword(String(ctx.body?.current ?? '')))) {
+        throw new HttpError('That is not your current password.', 403);
+      }
+      const problem = passwordProblem(ctx.body?.next);
+      if (problem) throw new HttpError(problem, 400);
+      await setPassword(ctx.body.next);
+      return {
+        ...json({ saved: true, protected: true, ...(await keyStatus()), passwordSet: true }),
+        cookie: sessionCookie(await createSession()),
+      };
+    } },
+
   { method: 'GET', pattern: '/health', handler: async () => {
       const { askedFirst, blocking } = await keyCoverage();
       return json({ ok: true, textProvider: askedFirst, missingProviders: blocking });
@@ -244,7 +302,8 @@ const routes = [
       return { status: 204, headers: {}, body: null };
     } },
 
-  { method: 'GET', pattern: '/settings', handler: async () => json(await keyStatus()) },
+  { method: 'GET', pattern: '/settings', handler: async () =>
+      json({ ...(await keyStatus()), passwordSet: await passwordConfigured() }) },
 
   { method: 'PUT', pattern: '/settings/key', handler: async (ctx) => {
       const provider = pickProvider(ctx);
@@ -306,10 +365,10 @@ function match(route, method, segments) {
   return params;
 }
 
-export async function handleApi({ method, path, query, body, raw }) {
+export async function handleApi({ method, path, query, body, raw, cookie }) {
   const segments = split(path);
   const url = new URL(query ? `?${query}` : '?', 'http://local');
-  const ctx = { params: {}, query: url.searchParams, body: null, raw };
+  const ctx = { params: {}, query: url.searchParams, body: null, raw, session: readSession(cookie) };
 
   const route = routes.find((entry) => {
     const params = match(entry, method, segments);
@@ -319,6 +378,17 @@ export async function handleApi({ method, path, query, body, raw }) {
   });
   if (!route) throw new HttpError('Unknown endpoint.', 404);
 
+  // A hosted deployment is on the open internet, so it is locked from the first
+  // request: the only way in is the set-once password screen. On your own
+  // machine the portal stays usable until you choose to put a password on it.
+  const locked = (await passwordConfigured()) || onNetlify();
+  if (!route.public && locked && !(await validSession(ctx.session))) {
+    throw new HttpError('Sign in to use this portal.', 401);
+  }
+
   ctx.body = body;
-  return route.handler(ctx);
+  const result = await route.handler(ctx);
+  if (!result.cookie) return result;
+  const { cookie: setCookie, ...rest } = result;
+  return { ...rest, headers: { ...rest.headers, 'set-cookie': setCookie } };
 }

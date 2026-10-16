@@ -23,6 +23,20 @@ async function request(url, options = {}) {
 }
 
 export const api = {
+  authStatus: () => request('/api/auth/status'),
+  login: (password) =>
+    request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    }),
+  logout: () => request('/api/auth/logout', { method: 'POST' }),
+  savePassword: (next, current) =>
+    request('/api/auth/password', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ next, current }),
+    }),
   health: () => request('/api/health'),
   history: () => request('/api/products'),
   get: (id) => request(`/api/products/${id}`),

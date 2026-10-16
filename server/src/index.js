@@ -79,6 +79,7 @@ const server = http.createServer(async (req, res) => {
       query: url.searchParams.toString(),
       body,
       raw,
+      cookie: req.headers.cookie,
     });
     send(res, result);
   } catch (error) {

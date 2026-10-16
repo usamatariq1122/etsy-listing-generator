@@ -31,6 +31,7 @@ export default async (request) => {
       query: url.searchParams.toString(),
       body,
       raw,
+      cookie: request.headers.get('cookie'),
     });
     return new Response(result.body, { status: result.status, headers: result.headers });
   } catch (error) {

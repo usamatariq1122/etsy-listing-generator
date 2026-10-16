@@ -16,8 +16,8 @@
   external_node_modules = ["pdfkit", "@google/genai", "@anthropic-ai/sdk"]
   node_bundler = "esbuild"
 
-[functions.api]
-  timeout = 60
+# A synchronous invocation always stops at 60 seconds and there is no setting
+# to raise it, which is why generation runs as a background function.
 
 [[redirects]]
   from = "/*"
