@@ -73,6 +73,14 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brand }),
     }),
+  prompt: () => request('/api/settings/prompt'),
+  savePrompt: (payload) =>
+    request('/api/settings/prompt', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+  clearPrompt: () => request('/api/settings/prompt', { method: 'DELETE' }),
   uploadImage: (id, slotId, file) =>
     request(`/api/products/${id}/image/${slotId}`, {
       method: 'POST',

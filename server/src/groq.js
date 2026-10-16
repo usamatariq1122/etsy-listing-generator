@@ -1,5 +1,5 @@
 import { config } from './config.js';
-import { buildSystemPrompt } from './masterPrompt.js';
+import { buildPrompt } from './content.js';
 import { extractJson } from './jsonparse.js';
 import { withRetry } from './retry.js';
 import { requireKey, resolveModel } from './apikeys.js';
@@ -54,7 +54,7 @@ export async function callGroqText(productName, brand, keywords, modelOverride) 
           max_tokens: 8000,
           response_format: { type: 'json_object' },
           messages: [
-            { role: 'system', content: buildSystemPrompt(productName, brand, keywords) },
+            { role: 'system', content: await buildPrompt(productName, brand, keywords) },
             { role: 'user', content: `Create the complete listing package for: ${productName}` },
           ],
         }),

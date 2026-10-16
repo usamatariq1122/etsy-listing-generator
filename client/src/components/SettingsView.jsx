@@ -128,7 +128,98 @@ function PasswordRow({ onChange, busy, configured }) {
   );
 }
 
-export default function SettingsView({ settings, busy, onSave, onRemove, onSaveModel, onSaveBrand, onChangePassword }) {
+function PromptCard({ prompt, busy, onSave, onClear }) {
+  const [text, setText] = useState('');
+  const [bannedWord, setBannedWord] = useState('');
+  const [legacyBrands, setLegacyBrands] = useState('');
+  const [error, setError] = useState('');
+  const [loadedFor, setLoadedFor] = useState(null);
+
+  if (!prompt) return <p className="muted">Loading prompt…</p>;
+
+  // Seed the boxes whenever a different copy arrives from the server.
+  if (loadedFor !== prompt.text) {
+    setLoadedFor(prompt.text);
+    setText(prompt.text);
+    setBannedWord(prompt.bannedWord || '');
+    setLegacyBrands((prompt.legacyBrands || []).join(', '));
+  }
+
+  const dirty = text !== prompt.text
+    || bannedWord !== (prompt.bannedWord || '')
+    || legacyBrands !== (prompt.legacyBrands || []).join(', ');
+
+  function submit(event) {
+    event.preventDefault();
+    if (!text.trim()) {
+      setError('Paste the master prompt, or use “Use the file again” to clear it.');
+      return;
+    }
+    setError('');
+    onSave({ text, bannedWord, legacyBrands });
+  }
+
+  return (
+    <form onSubmit={submit} className="stack">
+      <label className="field">
+        <span>Master prompt {prompt.usingFile ? `(currently from ${prompt.source})` : ''}</span>
+        <textarea
+          rows={14}
+          value={text}
+          spellCheck={false}
+          placeholder="Paste the full listing prompt. Use {{brand}}, {{product}} and {{keywords}} wherever the portal should fill itself in."
+          onChange={(e) => setText(e.target.value)}
+          disabled={Boolean(busy)}
+        />
+      </label>
+      <div className="row">
+        <label className="field shrink">
+          <span>Word never to appear</span>
+          <input
+            type="text"
+            value={bannedWord}
+            spellCheck={false}
+            maxLength={40}
+            onChange={(e) => setBannedWord(e.target.value)}
+            disabled={Boolean(busy)}
+          />
+        </label>
+        <label className="field">
+          <span>Old shop names to strip</span>
+          <input
+            type="text"
+            value={legacyBrands}
+            spellCheck={false}
+            placeholder="Comma separated"
+            onChange={(e) => setLegacyBrands(e.target.value)}
+            disabled={Boolean(busy)}
+          />
+        </label>
+      </div>
+      {error && <p className="inline-error">{error}</p>}
+      <div className="row">
+        <button type="submit" className="primary" disabled={Boolean(busy) || !dirty}>
+          Save prompt
+        </button>
+        {!prompt.usingFile && (
+          <button type="button" className="danger" onClick={onClear} disabled={Boolean(busy)}>
+            Use the file again
+          </button>
+        )}
+      </div>
+      <p className="muted small">
+        Saved text lives in this portal&apos;s database only - never in the code repository. It must still ask
+        for the JSON keys the portal stores (<code>file1_text</code>, <code>file2_text</code>,
+        {' '}<code>seo_title</code>, <code>seo_tags</code>, <code>mockup_prompts</code>,
+        {' '}<code>infographic_prompts</code>). Every generation fills <code>{'{{brand}}'}</code>,
+        {' '}<code>{'{{product}}'}</code> and <code>{'{{keywords}}'}</code>, and the word above is scrubbed
+        from the result.
+      </p>
+    </form>
+  );
+}
+
+export default function SettingsView({ settings, busy, onSave, onRemove, onSaveModel, onSaveBrand, onChangePassword, prompt, onSavePrompt, onClearPrompt }) {
   const [brandDraft, setBrandDraft] = useState(null);
   const [localError, setLocalError] = useState('');
 
@@ -245,6 +336,15 @@ export default function SettingsView({ settings, busy, onSave, onRemove, onSaveM
           Keys are stored in this computer&apos;s database and used from the next request onwards, so no
           restart is needed. Only their last 4 characters are ever shown.
         </p>
+      </section>
+
+      <section className="card">
+        <h2>Listing prompt</h2>
+        {onSavePrompt ? (
+          <PromptCard prompt={prompt} busy={busy} onSave={onSavePrompt} onClear={onClearPrompt} />
+        ) : (
+          <p className="muted small">Loading…</p>
+        )}
       </section>
 
       <section className="card">

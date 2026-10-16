@@ -1,4 +1,4 @@
-import { BANNED_WORD, LEGACY_BRANDS } from './rules.js';
+import { activeRules, bannedRe } from './content.js';
 
 // Replace/find patterns are global; test patterns deliberately are not, because
 // .test() on a /g/ regex is stateful and would produce flaky validation.
@@ -10,7 +10,6 @@ const INLINE_CITATION_FIND = /\(\s*[A-Z][\w.'-]+(?:\s*,?\s*(?:&|and)\s*[A-Z][\w.
 const CITATION_LINE_FIND = /^[ \t]*(?:sources?|references?|works?\s+cited|bibliography|footnotes?|citations?|image\s+credits?|via)\b[^\n]*$/gim;
 const CITATION_LINE_TEST = /^[ \t]*(?:sources?|references?|works?\s+cited|bibliography|footnotes?|citations?|image\s+credits?|via)\b/im;
 const REFERENCE_HEADING = /^[ \t]*(?:#{1,6}[ \t]*)?(?:references|sources|works cited|bibliography|source list)[ \t]*:?$/im;
-const BANNED_TEST = /etsy/i;
 
 const tidy = (text) =>
   String(text)
@@ -83,7 +82,7 @@ function scrubForeignNames(value, allowed) {
  */
 export function scrubBranding(text, { allow = [] } = {}) {
   const allowed = allow.map((name) => String(name).trim().toLowerCase()).filter(Boolean);
-  const brands = LEGACY_BRANDS.filter((name) => !allowed.includes(name.toLowerCase()));
+  const brands = activeRules.legacyBrands.filter((name) => !allowed.includes(name.toLowerCase()));
   let value = String(text ?? '');
 
   if (brands.length) {
@@ -243,9 +242,9 @@ export function cleanFileOne(raw) {
 
 export function scrubBannedWord(text) {
   const value = String(text ?? '');
-  const count = (value.match(new RegExp(BANNED_WORD, 'gi')) || []).length;
+  const count = (value.match(bannedRe()) || []).length;
   if (!count) return { text: value, count: 0 };
-  return { text: tidy(value.replace(new RegExp(BANNED_WORD, 'gi'), '')), count };
+  return { text: tidy(value.replace(bannedRe(), '')), count };
 }
 
 /** How often the banned word appears across a list of image prompts. */
@@ -262,7 +261,7 @@ export function validateFileOne(text) {
   if (!value.trim()) issues.push('File 1 came back empty.');
   if (value.includes('[') || value.includes(']')) issues.push('File 1 still contains a [ ] bracket.');
   if (URL_TEST.test(value)) issues.push('File 1 still contains a URL.');
-  if (BANNED_TEST.test(value)) issues.push(`File 1 still contains the banned word "${BANNED_WORD}".`);
+  if (activeRules.bannedTest.test(value)) issues.push(`File 1 still contains the banned word "${activeRules.bannedWord}".`);
   if (CITATION_LINE_TEST.test(value)) issues.push('File 1 still contains a source, reference or footnote line.');
   if (value.trim().length && value.trim().length < 400) {
     issues.push('File 1 is suspiciously short (under 400 characters).');
@@ -529,6 +528,6 @@ export function summarizeCleaning(removed) {
   if (removed.footnotes) notes.push(`removed ${removed.footnotes} footnote marker(s)`);
   if (removed.urls) notes.push(`removed ${removed.urls} URL(s)`);
   if (removed.referenceSection) notes.push('removed a trailing reference section');
-  if (removed.bannedWord) notes.push(`removed ${removed.bannedWord} occurrence(s) of "${BANNED_WORD}"`);
+  if (removed.bannedWord) notes.push(`removed ${removed.bannedWord} occurrence(s) of "${activeRules.bannedWord}"`);
   return notes;
 }

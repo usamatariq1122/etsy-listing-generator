@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { requireKey, resolveModel } from './apikeys.js';
-import { buildSystemPrompt } from './masterPrompt.js';
+import { buildPrompt } from './content.js';
 import { extractJson } from './jsonparse.js';
 
 /**
@@ -16,7 +16,7 @@ export async function callClaude(productName, brand, keywords) {
     model,
     max_tokens: 8000,
     temperature: 0.7,
-    system: buildSystemPrompt(productName, brand, keywords),
+    system: await buildPrompt(productName, brand, keywords),
     messages: [
       {
         role: 'user',

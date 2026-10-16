@@ -18,6 +18,7 @@ import { buildZip, documentBytes } from './zip.js';
 import { startGeneration } from './generate.js';
 import { keyCoverage, keyIssues, keyStatus, removeKey, removeModel, saveKey, saveModel } from './apikeys.js';
 import { brandIssues, clearBrand, saveBrand } from './brand.js';
+import { clearPrompt, promptIssues, promptSettings, savePrompt } from './content.js';
 import {
   clearFailures,
   createSession,
@@ -338,6 +339,17 @@ const routes = [
       await clearBrand();
       return json({ removed: true, ...(await keyStatus()) });
     } },
+
+  { method: 'GET', pattern: '/settings/prompt', handler: async () => json(await promptSettings()) },
+
+  { method: 'PUT', pattern: '/settings/prompt', handler: async (ctx) => {
+      const issues = promptIssues(ctx.body?.text);
+      if (issues.length) throw new HttpError(issues.join(' '), 400, { issues });
+      return json({ saved: true, ...(await savePrompt(ctx.body)) });
+    } },
+
+  { method: 'DELETE', pattern: '/settings/prompt', handler: async () =>
+      json({ cleared: true, ...(await clearPrompt()) }) },
 ];
 
 const PROVIDERS = ['gemini', 'anthropic', 'groq'];
