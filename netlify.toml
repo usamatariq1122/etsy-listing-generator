@@ -11,9 +11,10 @@
   NODE_VERSION = "24"
 
 [functions]
-  # pdfkit reads its font metrics from disk and @google/genai is a large CJS
-  # package; both are traced as files instead of folded into one bundle.
-  external_node_modules = ["pdfkit", "@google/genai", "@anthropic-ai/sdk"]
+  # pdfkit reads its font metrics from disk, @google/genai is a large CJS package,
+  # and pg is loaded with a dynamic import — all three are traced as files instead
+  # of folded into the bundle, so esbuild cannot inline them.
+  external_node_modules = ["pdfkit", "@google/genai", "@anthropic-ai/sdk", "pg"]
   node_bundler = "esbuild"
 
 # A synchronous invocation always stops at 60 seconds and there is no setting

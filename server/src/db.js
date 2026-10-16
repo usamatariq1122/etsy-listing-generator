@@ -1,8 +1,9 @@
-import mysql from 'mysql2/promise';
 import { config } from './config.js';
 
 // Two database backends, one set of functions: MariaDB/MySQL while you run this
 // locally (XAMPP), Netlify's managed Postgres once a Postgres URL is provided.
+// Both drivers are loaded on demand, because a hosted deployment only ever ships
+// and runs one of them.
 
 let pool = null;
 let pgPool = null;
@@ -13,8 +14,11 @@ const pgUrl = () => process.env.DATABASE_URL || process.env.NETLIFY_DB_URL;
 
 export const isPostgres = () => Boolean(pgUrl());
 
-export function getPool() {
+const mysqlDriver = async () => (await import('mysql2/promise')).default;
+
+export async function getPool() {
   if (!pool) {
+    const mysql = await mysqlDriver();
     pool = mysql.createPool({
       host: config.db.host,
       port: config.db.port,
@@ -54,7 +58,8 @@ async function query(sql, params = []) {
       changed: (result.rowCount ?? 0) > 0,
     };
   }
-  const [rows, fields] = await getPool().query(sql, params);
+  const mysql = await getPool();
+  const [rows, fields] = await mysql.query(sql, params);
   return { rows: rows ?? [], affectedRows: fields?.affectedRows ?? rows?.affectedRows ?? 0, changed: (fields?.changedRows ?? 0) > 0 };
 }
 
@@ -138,6 +143,7 @@ export async function initDb() {
     return;
   }
 
+  const mysql = await mysqlDriver();
   const bootstrap = await mysql.createConnection({
     host: config.db.host,
     port: config.db.port,
