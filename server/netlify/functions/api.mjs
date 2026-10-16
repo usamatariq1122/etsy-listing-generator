@@ -1,5 +1,5 @@
-import { handleApi } from '../../server/src/api.js';
-import { initDb } from '../../server/src/db.js';
+import { handleApi } from '../../src/api.js';
+import { initDb } from '../../src/db.js';
 
 // Every /api/* route except the generation job, which needs longer than a
 // normal invocation and lives in run.mjs.

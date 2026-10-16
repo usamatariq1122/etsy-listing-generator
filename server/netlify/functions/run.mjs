@@ -1,7 +1,7 @@
-import { isSafeId } from '../../server/src/paths.js';
-import { getProduct, initDb, updateProduct } from '../../server/src/db.js';
-import { runGeneration } from '../../server/src/generate.js';
-import { readSession, validSession } from '../../server/src/auth.js';
+import { isSafeId } from '../../src/paths.js';
+import { getProduct, initDb, updateProduct } from '../../src/db.js';
+import { runGeneration } from '../../src/generate.js';
+import { readSession, validSession } from '../../src/auth.js';
 
 // Writing a listing takes 30-60 seconds, longer than a normal invocation may
 // run. A background function gets the browser out of the wait: it answers 202

@@ -228,13 +228,13 @@ The rules above are the single `IMAGE_RULES` object in `server/src/rules.js`.
 ```
 Etsy portal/
 ├── netlify.toml          hosting: static client + Functions + build command
-├── netlify/functions/
-│   ├── api.mjs           every /api/* route, as one Netlify Function
-│   └── run.mjs           the listing-text job, as a background Function
 ├── server/
 │   ├── .env              ← your keys (never committed)
 │   ├── .env.example      ← template
 │   ├── models.json       ← the model names the Settings dropdown offers
+│   ├── netlify/functions/
+│   │   ├── api.mjs       every /api/* route, as one Netlify Function
+│   │   └── run.mjs       the listing-text job, as a background Function
 │   ├── data/products/    ← generated text, your uploads and ZIPs when running locally
 │   └── src/
 │       ├── index.js          local node:http server, static client, error handler
@@ -406,8 +406,8 @@ publishes it, so changes made here appear on the site without any manual step.
 | Piece | Where it runs |
 |-------|---------------|
 | React app | built by Vite into `client/dist`, served as static files |
-| `/api/*` | `netlify/functions/api.mjs` — the same route table the local server uses |
-| the listing-text job | `netlify/functions/run.mjs` — a background Function, so a 30–60 second model answer is never cut off |
+| `/api/*` | `server/netlify/functions/api.mjs` — the same route table the local server uses |
+| the listing-text job | `server/netlify/functions/run.mjs` — a background Function, so a 30–60 second model answer is never cut off |
 | products, settings, keyword cache | Netlify's managed Postgres (`DATABASE_URL` is provided automatically; the schema creates itself on first use) |
 | PDFs, uploaded images, ZIPs | Netlify Blobs store `listing-files`, under `products/<id>/…` |
 | API keys | **Settings → Access keys** in the deployed app, which stores them in your database, or site secrets for `GEMINI_API_KEY` / `GROQ_API_KEY` |

@@ -5,7 +5,9 @@
 [build]
   command = "npm ci --prefix server && npm ci --prefix client && npm run setup --prefix server && npm run build --prefix client"
   publish = "client/dist"
-  functions = "netlify/functions"
+  # Inside server/ on purpose: the Function entries import from ../src, and Netlify
+  # resolves and ships a function's node_modules from the package that holds it.
+  functions = "server/netlify/functions"
 
 [build.environment]
   NODE_VERSION = "24"
