@@ -1,0 +1,8 @@
+{
+  "name": "digital-listing-studio",
+  "private": true,
+  "description": "Netlify needs to see this package at build time to provision the managed Postgres; the app itself talks to the database through server/package.json.",
+  "dependencies": {
+    "@netlify/database": "^2.0.1"
+  }
+}

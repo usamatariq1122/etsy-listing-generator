@@ -2,12 +2,16 @@ import mysql from 'mysql2/promise';
 import { config } from './config.js';
 
 // Two database backends, one set of functions: MariaDB/MySQL while you run this
-// locally (XAMPP), Netlify's managed Postgres once DATABASE_URL is set.
+// locally (XAMPP), Netlify's managed Postgres once a Postgres URL is provided.
 
 let pool = null;
 let pgPool = null;
 
-export const isPostgres = () => Boolean(process.env.DATABASE_URL);
+// Netlify hands its managed Postgres to functions as NETLIFY_DB_URL; DATABASE_URL
+// is the name every other host uses. Either one means "speak Postgres".
+const pgUrl = () => process.env.DATABASE_URL || process.env.NETLIFY_DB_URL;
+
+export const isPostgres = () => Boolean(pgUrl());
 
 export function getPool() {
   if (!pool) {
@@ -29,7 +33,7 @@ async function postgresPool() {
   if (!pgPool) {
     const { default: pg } = await import('pg');
     pgPool = new pg.Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: pgUrl(),
       ssl: process.env.DB_PGSSL === 'disable' ? false : { require: true, rejectUnauthorized: false },
       max: 5,
     });
