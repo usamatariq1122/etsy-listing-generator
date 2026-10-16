@@ -1,0 +1,22 @@
+{
+  "name": "etsy-listing-generator-server",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "setup": "node scripts/setup-assets.mjs",
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@google/genai": "^2.29.1",
+    "@netlify/blobs": "^8.2.0",
+    "archiver": "^7.0.1",
+    "dotenv": "^16.4.7",
+    "mysql2": "^3.12.0",
+    "pdfkit": "^0.20.2",
+    "pg": "^8.13.1"
+  }
+}

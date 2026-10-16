@@ -1,0 +1,25 @@
+# Hosting for the Etsy Digital Listing Generator: the React app as static files,
+# the API as Netlify Functions, data in Netlify's Postgres, listing files in
+# Blobs. Pushing to GitHub rebuilds and republishes all of it.
+
+[build]
+  command = "npm ci --prefix server && npm ci --prefix client && npm run setup --prefix server && npm run build --prefix client"
+  publish = "client/dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+[functions]
+  # pdfkit reads its font metrics from disk and @google/genai is a large CJS
+  # package; both are traced as files instead of folded into one bundle.
+  external_node_modules = ["pdfkit", "@google/genai", "@anthropic-ai/sdk"]
+  node_bundler = "esbuild"
+
+[functions.api]
+  timeout = 60
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

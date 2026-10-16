@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*.local
+/server/data/
+client/dist/
+.netlify/
+*.log
+
+# The shop's own wording. The repo ships masterPrompt.example.js and
+# rules.example.js; `npm run setup` copies them and you edit the copies, which
+# git never sees.
+server/src/masterPrompt.js
+server/src/rules.js
+
+# Local scratch
+server/create.json
+.backup-before-image-removal/

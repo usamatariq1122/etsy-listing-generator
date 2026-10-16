@@ -1,0 +1,26 @@
+{
+  "_about": "The models the Settings dropdown offers, best first. Add or remove names here and they appear on the next page load - no code change, no restart. The first name of a group is used when nothing is chosen in Settings and no *_TEXT_MODEL / *_MODEL override is set in server/.env.",
+  "gemini": {
+    "label": "Gemini",
+    "models": [
+      "gemini-3.8-flash",
+      "gemini-3.6-flash",
+      "gemini-3.5-flash",
+      "gemini-3.1-flash-lite"
+    ]
+  },
+  "groq": {
+    "label": "Groq",
+    "models": [
+      "llama-3.3-70b-versatile",
+      "openai/gpt-oss-120b",
+      "llama-3.1-8b-instant"
+    ]
+  },
+  "anthropic": {
+    "label": "Claude",
+    "models": [
+      "claude-sonnet-5-5"
+    ]
+  }
+}
