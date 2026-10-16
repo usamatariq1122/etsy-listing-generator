@@ -26,7 +26,6 @@ export default function App() {
   const [notice, setNotice] = useState(null);
   const [health, setHealth] = useState(null);
   const [settings, setSettings] = useState(null);
-  const [prompt, setPrompt] = useState(null);
   const [history, setHistory] = useState([]);
   const [session, setSession] = useState(null);
 
@@ -58,9 +57,7 @@ export default function App() {
 
   const refreshSettings = useCallback(async () => {
     try {
-      const [data, promptData] = await Promise.all([api.settings(), api.prompt()]);
-      setSettings(data);
-      setPrompt(promptData);
+      setSettings(await api.settings());
     } catch (err) {
       setError(err);
     }
@@ -247,23 +244,6 @@ export default function App() {
     }
   }
 
-  async function handleSavePrompt(payload) {
-    const data = await run('Saving prompt', 'Storing it in this portal only, never in the code repository.', () =>
-      api.savePrompt(payload));
-    if (data) {
-      setPrompt(data);
-      setNotice('Listing prompt saved. The next generation uses it.');
-    }
-  }
-
-  async function handleClearPrompt() {
-    const data = await run('Clearing prompt', null, () => api.clearPrompt());
-    if (data) {
-      setPrompt(data);
-      setNotice('Listing prompt cleared - the file on this machine is used again.');
-    }
-  }
-
   async function handleChangePassword(current, next) {    const data = await run('Saving password', null, () => api.savePassword(next, current));
     if (data) {
       setSettings(data);
@@ -386,9 +366,6 @@ export default function App() {
             onSaveModel={handleSaveModel}
             onSaveBrand={handleSaveBrand}
             onChangePassword={handleChangePassword}
-            prompt={prompt}
-            onSavePrompt={handleSavePrompt}
-            onClearPrompt={handleClearPrompt}
           />
         ) : view === 'history' ? (
           <HistoryView

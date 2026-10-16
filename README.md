@@ -100,13 +100,6 @@ Gemini or Groq for the text.
 
 `server/src/rules.js` is the single source of truth, and `server/src/validate.js` applies it.
 
-Settings → **Listing prompt** can override both files at runtime: the master prompt you paste, the
-banned word and the old shop names are kept in the `settings` table (`prompt.system`,
-`rules.banned_word`, `rules.legacy_brands`) and are read again at the start of every generation.
-Nothing saved there is ever written to git, which is how a hosted portal gets your real wording
-without your prompt leaving your machine. `{{brand}}`, `{{product}}` and `{{keywords}}` are filled in
-for you; clearing the saved copy falls back to the files on this machine.
-
 **File 1 is cleaned, then validated, then retried.**
 1. Claude's File 1 text is stripped of: bracketed spans `[...]`, footnote markers, inline
    citations like `(Smith, 2021)`, URLs, whole lines starting with *Source / References /
@@ -258,7 +251,6 @@ Etsy portal/
 │       ├── rules.js          banned word, branding, image rules (git-ignored)
 │       ├── rules.example.js  generic stand-in that `npm run setup` copies
 │       ├── keywords.js       live buyer queries + the keyword cache
-│       ├── content.js        the master prompt and rules, from file or from Settings
 │       ├── claude.js         Anthropic call (JSON prefill) + JSON extraction
 │       ├── gemini.js         one Gemini model call, structured output + friendly errors
 │       ├── groq.js           OpenAI-compatible Groq call (key from Settings or GROQ_API_KEY)
@@ -309,9 +301,6 @@ Etsy portal/
 | DELETE | `/api/settings/model` | go back to the `.env` model |
 | PUT | `/api/settings/brand` | save the brand name used in PDFs and prompts |
 | DELETE | `/api/settings/brand` | reset the brand name to the built-in placeholder |
-| GET | `/api/settings/prompt` | the pasted master prompt, or say the file is in use |
-| PUT | `/api/settings/prompt` | save the master prompt, the banned word and the old shop names |
-| DELETE | `/api/settings/prompt` | drop the saved copies and use this machine's files again |
 
 Everything except the four `/api/auth/*` routes needs the `listing_session` cookie as soon as a
 password exists. Hosted, there is no way round that: a deployment with no password yet answers every
@@ -434,9 +423,9 @@ What changes when it is hosted:
   disk accepts. Compress the image, or run the portal on your own machine for full-resolution files.
 - **The private files stay private.** `masterPrompt.js`, `rules.js` and `.env` are git-ignored, so a
   cloned or hosted build gets the generic `*.example.js` copies that `npm run setup` writes during the
-  build. Edit your own wording locally; publish only the tool. On the hosted site, paste your real
-  master prompt into **Settings → Listing prompt** - it is stored in that site's database and never in
-  the repository. Clearing it there falls back to the generic file copy again.
+  build. Edit your own wording locally; publish only the tool. A deployment built from this public
+  repository therefore writes listings from the generic example prompt, so give the hosted site your
+  own `masterPrompt.js` and `rules.js` (private repo, or uploaded into the deploy) before relying on it.
 - **Brand and keys are per-database.** A fresh deployment has the neutral placeholder brand and no
   keys; set them once in the deployed Settings and they are stored in that deployment's database.
   Your local MySQL rows never travel to the site, and the git repository never sees any of them.

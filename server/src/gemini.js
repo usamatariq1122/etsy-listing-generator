@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { requireKey, resolveModel } from './apikeys.js';
-import { buildPrompt } from './content.js';
+import { buildSystemPrompt } from './masterPrompt.js';
 import { extractJson } from './jsonparse.js';
 import { withRetry } from './retry.js';
 
@@ -55,7 +55,7 @@ export async function callGeminiText(productName, brand, keywords, modelOverride
         model,
         contents: `Create the complete listing package for: ${productName}`,
         config: {
-          systemInstruction: await buildPrompt(productName, brand, keywords),
+          systemInstruction: buildSystemPrompt(productName, brand, keywords),
           responseMimeType: 'application/json',
           responseSchema: LISTING_SCHEMA,
           temperature: 0.7,
