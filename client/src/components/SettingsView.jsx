@@ -242,7 +242,7 @@ export default function SettingsView({ settings, busy, onSave, onRemove, onSaveM
           />
         ))}
         <p className="muted small">
-          Keys are stored in this computer&apos;s database and used from the next request onwards, so no
+          Keys are encrypted before they are saved and used from the next request onwards, so no
           restart is needed. Only their last 4 characters are ever shown.
         </p>
       </section>

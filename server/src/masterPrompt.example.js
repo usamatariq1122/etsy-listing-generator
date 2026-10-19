@@ -34,7 +34,9 @@ Answer with one JSON object and nothing around it:
 function keywordBlock(keywords) {
   const list = (keywords ?? []).filter(Boolean);
   if (!list.length) return '';
-  return `\n\nBuyers also search for these phrases, so work them in where they read naturally: ${list.join(', ')}.`;
+  return `\n\nSearch phrases buyers type for this niche, in the order they should be used: ${list.join(', ')}. `
+    + 'The first one is the main keyword: open the SEO title with it and work it into the first two lines of the description. '
+    + 'Use the others as tags where they fit the character limit, and never reorder the list.';
 }
 
 export function buildSystemPrompt(productName, brand, keywords = []) {

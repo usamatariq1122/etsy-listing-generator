@@ -28,8 +28,9 @@ export async function runGeneration(id) {
 
   await updateProduct(id, { status: 'generating' });
   try {
-    const { result, cleaningNotes, seoWarnings, keywords, quality, attempts } = await generateListingText(
+    const { result, cleaningNotes, seoWarnings, keywords, quality, seoCheck, attempts } = await generateListingText(
       product.product_name,
+      product.selected_keywords || [],
     );
     // A short guide or a lite-model answer is flagged before anything is
     // printed, so no PDF appears as if nothing were wrong.
@@ -42,7 +43,7 @@ export async function runGeneration(id) {
       mockup_prompts: result.mockup_prompts,
       infographic_prompts: result.infographic_prompts,
       status: 'text',
-      warnings: { ...(product.warnings || {}), cleaningNotes, seoWarnings, keywords, quality, attempts, error: null },
+      warnings: { ...(product.warnings || {}), cleaningNotes, seoWarnings, keywords, quality, seoCheck, attempts, error: null },
     });
   } catch (error) {
     await updateProduct(id, {

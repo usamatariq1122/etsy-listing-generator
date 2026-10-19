@@ -1,4 +1,5 @@
 import { deleteSetting, getSetting, setSetting } from './db.js';
+import { decryptSecret, encryptSecret } from './secrets.js';
 import { config } from './config.js';
 import { brandName } from './brand.js';
 import { modelCatalog } from './modelCatalog.js';
@@ -97,7 +98,7 @@ const mask = (key) => (key.length <= 8 ? '****' : `****${key.slice(-4)}`);
  * very next request, without restarting the backend.
  */
 export async function resolveKey(provider = activeProvider()) {
-  const saved = (await getSetting(settingKey(provider)))?.trim() ?? '';
+  const saved = (decryptSecret(await getSetting(settingKey(provider))) ?? '').trim();
   const fromEnv = (envKey(provider) ?? '').trim();
   const key = saved || fromEnv;
   return { provider, key, source: saved ? 'app' : unusable(fromEnv) ? null : 'env' };
@@ -147,7 +148,7 @@ export function keyIssues(provider, raw) {
 }
 
 export async function saveKey(provider, raw) {
-  await setSetting(settingKey(provider), String(raw).trim());
+  await setSetting(settingKey(provider), encryptSecret(String(raw).trim()));
   return keyStatus();
 }
 

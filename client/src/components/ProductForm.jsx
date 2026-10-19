@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import KeywordPicker from './KeywordPicker.jsx';
 
 export default function ProductForm({ busy, onCreate }) {
   const [productName, setProductName] = useState('');
+  const [picked, setPicked] = useState([]);
   const [localError, setLocalError] = useState('');
 
   function submit(event) {
@@ -11,7 +13,7 @@ export default function ProductForm({ busy, onCreate }) {
       return;
     }
     setLocalError('');
-    onCreate(productName.trim());
+    onCreate(productName.trim(), picked);
   }
 
   return (
@@ -31,6 +33,8 @@ export default function ProductForm({ busy, onCreate }) {
           />
         </label>
 
+        <KeywordPicker productName={productName} busy={busy} picked={picked} onPicked={setPicked} />
+
         {localError && <p className="inline-error">{localError}</p>}
 
         <button type="submit" className="primary" disabled={Boolean(busy)}>
@@ -40,7 +44,8 @@ export default function ProductForm({ busy, onCreate }) {
 
       <p className="muted small">
         The text model writes File 1 (product-content.pdf), File 2 (etsy-listing-seo.pdf) and the 7 image prompts.
-        File 1 is automatically checked for brackets, citations, source references and footnotes.
+        File 1 is automatically checked for brackets, citations, source references and footnotes, and the listing
+        fields are then scored against the keywords you ticked.
       </p>
     </section>
   );

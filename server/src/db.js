@@ -1,204 +1,129 @@
 import { config } from './config.js';
 
-// Two database backends, one set of functions: MariaDB/MySQL while you run this
-// locally (XAMPP), Netlify's managed Postgres once a Postgres URL is provided.
-// Both drivers are loaded on demand, because a hosted deployment only ever ships
-// and runs one of them.
+// One database: Postgres. Hosted it is Netlify's managed Postgres, locally the
+// one `netlify dev` starts, and in both cases the URL arrives as an environment
+// variable. `pg` is loaded on demand so a bundle without it never touches it.
 
-let pool = null;
 let pgPool = null;
 
-// Netlify hands its managed Postgres to functions as NETLIFY_DB_URL; DATABASE_URL
-// is the name every other host uses. Either one means "speak Postgres".
-const pgUrl = () => process.env.DATABASE_URL || process.env.NETLIFY_DB_URL;
-
-export const isPostgres = () => Boolean(pgUrl());
-
-const mysqlDriver = async () => (await import('mysql2/promise')).default;
-
-export async function getPool() {
-  if (!pool) {
-    const mysql = await mysqlDriver();
-    pool = mysql.createPool({
-      host: config.db.host,
-      port: config.db.port,
-      user: config.db.user,
-      password: config.db.password,
-      database: config.db.database,
-      waitForConnections: true,
-      connectionLimit: 5,
-      charset: 'utf8mb4_unicode_ci',
-    });
+// Netlify's managed Postgres insists on TLS; the local dev instance does not
+// speak it, so the host decides unless DB_PGSSL says otherwise.
+function useSsl(url) {
+  if (process.env.DB_PGSSL === 'disable') return false;
+  if (process.env.DB_PGSSL === 'require') return { require: true, rejectUnauthorized: false };
+  let host = '';
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return { require: true, rejectUnauthorized: false };
   }
-  return pool;
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return false;
+  return { require: true, rejectUnauthorized: false };
 }
 
-async function postgresPool() {
+async function pool() {
   if (!pgPool) {
+    if (!config.databaseUrl) {
+      throw new Error(
+        'No database URL is set. Run this locally with `netlify dev`, which starts Postgres and hands it over as NETLIFY_DB_URL.',
+      );
+    }
     const { default: pg } = await import('pg');
     pgPool = new pg.Pool({
-      connectionString: pgUrl(),
-      ssl: process.env.DB_PGSSL === 'disable' ? false : { require: true, rejectUnauthorized: false },
+      connectionString: config.databaseUrl,
+      ssl: useSsl(config.databaseUrl),
       max: 5,
     });
   }
   return pgPool;
 }
 
-/** `?` placeholders and raw results are MySQL's; both backends get one shape. */
+/** Keeps the `?` placeholders the routes are written with. */
 async function query(sql, params = []) {
-  if (isPostgres()) {
-    const db = await postgresPool();
-    let index = 0;
-    const text = sql.replace(/\?/g, () => `$${(index += 1)}`);
-    const result = await db.query(text, params);
-    return {
-      rows: result.rows ?? [],
-      affectedRows: result.rowCount ?? 0,
-      changed: (result.rowCount ?? 0) > 0,
-    };
-  }
-  const mysql = await getPool();
-  const [rows, fields] = await mysql.query(sql, params);
-  return { rows: rows ?? [], affectedRows: fields?.affectedRows ?? rows?.affectedRows ?? 0, changed: (fields?.changedRows ?? 0) > 0 };
+  const db = await pool();
+  let index = 0;
+  const text = sql.replace(/\?/g, () => `$${(index += 1)}`);
+  const result = await db.query(text, params);
+  return {
+    rows: result.rows ?? [],
+    affectedRows: result.rowCount ?? 0,
+    changed: (result.rowCount ?? 0) > 0,
+  };
 }
 
 const upsert = {
   // One settings row per key.
-  setting: (isPg) =>
-    isPg
-      ? `INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)
-         ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = CURRENT_TIMESTAMP`
-      : `INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)
-         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
-  image: (isPg) =>
-    isPg
-      ? `INSERT INTO product_images (product_id, slot_id, file_name, width, height, format, bytes)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (product_id, slot_id) DO UPDATE SET file_name = EXCLUDED.file_name, width = EXCLUDED.width,
-           height = EXCLUDED.height, format = EXCLUDED.format, bytes = EXCLUDED.bytes,
-           uploaded_at = CURRENT_TIMESTAMP`
-      : `INSERT INTO product_images (product_id, slot_id, file_name, width, height, format, bytes)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE file_name = VALUES(file_name), width = VALUES(width),
-           height = VALUES(height), format = VALUES(format), bytes = VALUES(bytes),
-           uploaded_at = CURRENT_TIMESTAMP`,
+  setting: `INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)
+     ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = CURRENT_TIMESTAMP`,
+  image: `INSERT INTO product_images (product_id, slot_id, file_name, width, height, format, bytes)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (product_id, slot_id) DO UPDATE SET file_name = EXCLUDED.file_name, width = EXCLUDED.width,
+       height = EXCLUDED.height, format = EXCLUDED.format, bytes = EXCLUDED.bytes,
+       uploaded_at = CURRENT_TIMESTAMP`,
 };
 
-/** Creates the schema on first run so nobody has to run SQL by hand. */
+/**
+ * Creates the schema on first run so nobody has to run SQL by hand. The same
+ * tables are committed as a Netlify migration, so this only ever has to catch a
+ * freshly started local database — and two cold invocations can boot at once,
+ * which makes "it already exists" a success.
+ */
 export async function initDb() {
-  if (isPostgres()) {
-    // Two cold invocations can boot at once, so "it already exists" is success.
-    const ddl = async (sql) => {
-      try {
-        await query(sql);
-      } catch (error) {
-        if (!['42710', '42P07', '23505'].includes(error.code)) throw error;
-      }
-    };
+  const ddl = async (sql) => {
+    try {
+      await query(sql);
+    } catch (error) {
+      if (!['42710', '42P07', '23505'].includes(error.code)) throw error;
+    }
+  };
 
-    await ddl(`
-      CREATE TABLE IF NOT EXISTS products (
-        id VARCHAR(36) PRIMARY KEY,
-        product_name VARCHAR(255) NOT NULL,
-        file1_text TEXT,
-        file2_text TEXT,
-        mockup_prompts JSONB,
-        infographic_prompts JSONB,
-        zip_name VARCHAR(255),
-        status VARCHAR(40) NOT NULL DEFAULT 'created',
-        warnings JSONB,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await ddl(`
-      CREATE TABLE IF NOT EXISTS settings (
-        setting_key VARCHAR(64) PRIMARY KEY,
-        setting_value TEXT NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await ddl(`
-      CREATE TABLE IF NOT EXISTS keyword_cache (
-        seed VARCHAR(190) PRIMARY KEY,
-        terms JSONB NOT NULL,
-        fetched_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    await ddl(`
-      CREATE TABLE IF NOT EXISTS product_images (
-        product_id VARCHAR(36) NOT NULL REFERENCES products (id) ON DELETE CASCADE,
-        slot_id VARCHAR(24) NOT NULL,
-        file_name VARCHAR(255) NOT NULL,
-        width INT NOT NULL,
-        height INT NOT NULL,
-        format VARCHAR(12) NOT NULL,
-        bytes INT NOT NULL,
-        uploaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (product_id, slot_id)
-      )
-    `);
-    await ddl('CREATE INDEX IF NOT EXISTS products_created_at ON products (created_at DESC)');
-    return;
-  }
-
-  const mysql = await mysqlDriver();
-  const bootstrap = await mysql.createConnection({
-    host: config.db.host,
-    port: config.db.port,
-    user: config.db.user,
-    password: config.db.password,
-    multipleStatements: true,
-  });
-  await bootstrap.query(
-    `CREATE DATABASE IF NOT EXISTS \`${config.db.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
-  );
-  await bootstrap.end();
-
-  await query(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS products (
-      id CHAR(36) NOT NULL PRIMARY KEY,
+      id VARCHAR(36) PRIMARY KEY,
       product_name VARCHAR(255) NOT NULL,
-      file1_text MEDIUMTEXT NULL,
-      file2_text MEDIUMTEXT NULL,
-      mockup_prompts JSON NULL,
-      infographic_prompts JSON NULL,
-      zip_name VARCHAR(255) NULL,
+      selected_keywords JSONB,
+      file1_text TEXT,
+      file2_text TEXT,
+      mockup_prompts JSONB,
+      infographic_prompts JSONB,
+      zip_name VARCHAR(255),
       status VARCHAR(40) NOT NULL DEFAULT 'created',
-      warnings JSON NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      warnings JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
   `);
-  await query(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS settings (
-      setting_key VARCHAR(64) NOT NULL PRIMARY KEY,
+      setting_key VARCHAR(64) PRIMARY KEY,
       setting_value TEXT NOT NULL,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
   `);
-  await query(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS keyword_cache (
-      seed VARCHAR(190) NOT NULL PRIMARY KEY,
-      terms JSON NOT NULL,
-      fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      seed VARCHAR(190) PRIMARY KEY,
+      terms JSONB NOT NULL,
+      fetched_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
   `);
-  await query(`
+  await ddl(`
     CREATE TABLE IF NOT EXISTS product_images (
-      product_id CHAR(36) NOT NULL,
+      product_id VARCHAR(36) NOT NULL REFERENCES products (id) ON DELETE CASCADE,
       slot_id VARCHAR(24) NOT NULL,
       file_name VARCHAR(255) NOT NULL,
       width INT NOT NULL,
       height INT NOT NULL,
       format VARCHAR(12) NOT NULL,
       bytes INT NOT NULL,
-      uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (product_id, slot_id),
-      CONSTRAINT fk_image_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      uploaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (product_id, slot_id)
+    )
   `);
+  await ddl('CREATE INDEX IF NOT EXISTS products_created_at ON products (created_at DESC)');
+  // Hosted databases get this column from the migration; a local one that was
+  // created before the keyword step only has it after this line.
+  await ddl('ALTER TABLE products ADD COLUMN IF NOT EXISTS selected_keywords JSONB');
 }
 
 export async function getSetting(key) {
@@ -207,11 +132,20 @@ export async function getSetting(key) {
 }
 
 export async function setSetting(key, value) {
-  await query(upsert.setting(isPostgres()), [key, value]);
+  await query(upsert.setting, [key, value]);
 }
 
 export async function deleteSetting(key) {
   await query('DELETE FROM settings WHERE setting_key = ?', [key]);
+}
+
+/** Every stored settings pair, for the one-off pass that encrypts saved keys. */
+export async function listSettings(prefix) {
+  const { rows } = await query(
+    'SELECT setting_key, setting_value FROM settings WHERE setting_key LIKE ? ORDER BY setting_key',
+    [`${prefix}%`],
+  );
+  return rows;
 }
 
 const parseJson = (value, fallback) => {
@@ -228,14 +162,20 @@ function hydrate(row) {
   if (!row) return null;
   return {
     ...row,
+    selected_keywords: parseJson(row.selected_keywords, []),
     mockup_prompts: parseJson(row.mockup_prompts, []),
     infographic_prompts: parseJson(row.infographic_prompts, []),
     warnings: parseJson(row.warnings, {}),
   };
 }
 
-export async function createProduct({ id, productName, status = 'created' }) {
-  await query(`INSERT INTO products (id, product_name, status) VALUES (?, ?, ?)`, [id, productName, status]);
+export async function createProduct({ id, productName, keywords = [], status = 'created' }) {
+  await query('INSERT INTO products (id, product_name, selected_keywords, status) VALUES (?, ?, ?, ?)', [
+    id,
+    productName,
+    JSON.stringify(keywords),
+    status,
+  ]);
   return getProduct(id);
 }
 
@@ -254,15 +194,14 @@ export async function listProducts() {
 
 export async function updateProduct(id, fields) {
   const allowed = [
-    'product_name', 'file1_text', 'file2_text', 'mockup_prompts',
+    'product_name', 'selected_keywords', 'file1_text', 'file2_text', 'mockup_prompts',
     'infographic_prompts', 'zip_name', 'status', 'warnings',
   ];
   const entries = Object.entries(fields).filter(([key]) => allowed.includes(key));
   if (!entries.length) return getProduct(id);
 
-  const jsonColumns = new Set(['mockup_prompts', 'infographic_prompts', 'warnings']);
-  const quote = (key) => (isPostgres() ? `"${key}"` : `\`${key}\``);
-  const sets = [...entries.map(([key]) => `${quote(key)} = ?`), 'updated_at = CURRENT_TIMESTAMP'].join(', ');
+  const jsonColumns = new Set(['selected_keywords', 'mockup_prompts', 'infographic_prompts', 'warnings']);
+  const sets = [...entries.map(([key]) => `"${key}" = ?`), 'updated_at = CURRENT_TIMESTAMP'].join(', ');
   const values = entries.map(([key, value]) => (jsonColumns.has(key) ? JSON.stringify(value ?? null) : value));
 
   await query(`UPDATE products SET ${sets} WHERE id = ?`, [...values, id]);
@@ -275,7 +214,7 @@ export async function deleteProduct(id) {
 }
 
 export async function saveProductImage({ productId, slotId, fileName, width, height, format, bytes }) {
-  await query(upsert.image(isPostgres()), [productId, slotId, fileName, width, height, format, bytes]);
+  await query(upsert.image, [productId, slotId, fileName, width, height, format, bytes]);
 }
 
 const IMAGE_COLUMNS = 'slot_id, file_name, width, height, format, bytes, uploaded_at';
@@ -311,28 +250,19 @@ export async function clearProducts() {
 
 /** Cached search suggestions that are no older than `days`. */
 export async function cachedKeywords(seed, days) {
-  const { rows } = isPostgres()
-    ? await query(
-        `SELECT terms FROM keyword_cache
-          WHERE seed = ? AND fetched_at > CURRENT_TIMESTAMP - make_interval(days => ?)`,
-        [seed, days],
-      )
-    : await query(
-        `SELECT terms FROM keyword_cache
-          WHERE seed = ? AND fetched_at > DATE_SUB(NOW(), INTERVAL ? DAY)`,
-        [seed, days],
-      );
+  const { rows } = await query(
+    `SELECT terms FROM keyword_cache
+      WHERE seed = ? AND fetched_at > CURRENT_TIMESTAMP - make_interval(days => ?)`,
+    [seed, days],
+  );
   if (!rows.length) return null;
   return parseJson(rows[0].terms, null);
 }
 
 export async function storeKeywords(seed, terms) {
   await query(
-    isPostgres()
-      ? `INSERT INTO keyword_cache (seed, terms) VALUES (?, ?)
-         ON CONFLICT (seed) DO UPDATE SET terms = EXCLUDED.terms, fetched_at = CURRENT_TIMESTAMP`
-      : `INSERT INTO keyword_cache (seed, terms) VALUES (?, ?)
-         ON DUPLICATE KEY UPDATE terms = VALUES(terms), fetched_at = CURRENT_TIMESTAMP`,
+    `INSERT INTO keyword_cache (seed, terms) VALUES (?, ?)
+       ON CONFLICT (seed) DO UPDATE SET terms = EXCLUDED.terms, fetched_at = CURRENT_TIMESTAMP`,
     [seed, JSON.stringify(terms)],
   );
 }

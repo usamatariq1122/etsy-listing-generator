@@ -104,6 +104,15 @@ export default function App() {
     if (warnings.seoWarnings?.length) {
       lines.push(`Check the SEO limits in File 2: ${warnings.seoWarnings.join(' ')}`);
     }
+    const seo = warnings.seoCheck;
+    if (seo?.items?.length) {
+      const fixes = seo.items.filter((item) => !item.pass).length;
+      lines.push(
+        fixes
+          ? `SEO check: ${seo.score}/100 — ${fixes} item${fixes === 1 ? '' : 's'} to fix in the SEO check panel.`
+          : `SEO check: ${seo.score}/100, every check passed.`,
+      );
+    }
     const quality = warnings.quality;
     if (quality?.model) {
       const busy = quality.skipped?.length ? `, after ${quality.skipped.length} busy model(s) were skipped` : '';
@@ -133,11 +142,11 @@ export default function App() {
     }
   }
 
-  async function handleCreate(productName) {
+  async function handleCreate(productName, keywords) {
     await generateText(
       'Writing your listing package',
       'The text model is generating File 1, File 2 and 7 image prompts. This takes about 30-60 seconds.',
-      () => api.create(productName),
+      () => api.create(productName, keywords),
     );
   }
 

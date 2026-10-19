@@ -1,6 +1,7 @@
 import { callTextModel } from './textgen.js';
 import { brandName } from './brand.js';
 import { buyerQueries } from './keywords.js';
+import { checkSeo } from './seoCheck.js';
 import {
   alignSeo,
   applyBrandLicense,
@@ -45,13 +46,18 @@ function guideQuality(provider, model, skipped, file1Text) {
  * Generates the listing text. File 1 is cleaned first; only a broken File 1 or
  * File 2 costs a second model call, because a slow retry doubles the wait.
  * SEO limit breaches are fixed on the spot by repairSeo and reported as
- * warnings instead. The title and tags are then checked against real buyer
- * queries for the niche, which the model cannot invent on its own.
+ * warnings instead. The title and tags are checked against real buyer queries
+ * for the niche: the ones the seller ticked when they ticked any, otherwise the
+ * ones the autocomplete lookup returned. The finished fields then get scored.
  */
-export async function generateListingText(productName) {
+export async function generateListingText(productName, picked = []) {
   let lastIssues = [];
   const brand = await brandName();
-  const keywords = await buyerQueries(productName);
+  const live = picked.length ? null : await buyerQueries(productName);
+  const terms = picked.length ? picked : live.terms;
+  const keywords = picked.length
+    ? { terms: picked, picked, seeds: [], source: 'picked' }
+    : { ...live, picked: [] };
 
   for (let attempt = 1; attempt <= MAX_TEXT_ATTEMPTS; attempt += 1) {
     const { json: raw, provider, model, skipped } = await callTextModel(productName, brand, keywords.terms);
@@ -79,9 +85,16 @@ export async function generateListingText(productName) {
       ...(promptWords ? [`removed the banned word ${promptWords} time(s) from the image prompts`] : []),
     ];
     const quality = guideQuality(provider, model, skipped, result.file1_text);
+    const seoCheck = checkSeo({
+      shape: result,
+      file2Text: result.file2_text,
+      picked,
+      terms,
+      productName,
+    });
 
     if (!blocking.length) {
-      return { result, cleaningNotes, seoWarnings, keywords, quality, attempts: attempt };
+      return { result, cleaningNotes, seoWarnings, keywords, quality, seoCheck, attempts: attempt };
     }
     lastIssues = [...blocking, ...seoWarnings];
   }

@@ -12,7 +12,9 @@ import { IMAGE_RULES } from './rules.js';
 import { SLOTS, getSlot } from './slots.js';
 import { dropImage, resolveImage, storeImage } from './uploads.js';
 import { isSafeId, zipKey } from './paths.js';
-import { contentTypeFor, deleteFile, deletePrefix, getFile, onNetlify } from './files.js';
+import { contentTypeFor, deleteFile, deletePrefix, getFile } from './files.js';
+import { config } from './config.js';
+import { keywordIdeas, pickedKeywords } from './keywords.js';
 import { TEXT_FILES } from './documents.js';
 import { buildZip, documentBytes } from './zip.js';
 import { startGeneration } from './generate.js';
@@ -25,6 +27,7 @@ import {
   noteFailure,
   passwordConfigured,
   passwordProblem,
+  portalLocked,
   readSession,
   sessionCookie,
   setPassword,
@@ -67,7 +70,7 @@ class HttpError extends Error {
 
 // A function invocation accepts about 6 MB, so a hosted build caps uploads
 // below the 25 MB the desktop version will happily take from disk.
-const maxUploadBytes = () => Math.min(IMAGE_RULES.maxBytes, onNetlify() ? 4 * 1024 * 1024 : IMAGE_RULES.maxBytes);
+const maxUploadBytes = () => Math.min(IMAGE_RULES.maxBytes, config.deployed ? 4 * 1024 * 1024 : IMAGE_RULES.maxBytes);
 
 async function loadProduct(params) {
   const { id } = params;
@@ -94,6 +97,7 @@ async function publicView(product) {
   return {
     id: product.id,
     productName: product.product_name,
+    keywords: product.selected_keywords || [],
     status: product.status,
     file1Text: product.file1_text || '',
     file2Text: product.file2_text || '',
@@ -136,7 +140,7 @@ const routes = [
       // way it always did until a password exists or the portal goes online.
       return json({
         protected: configured,
-        signedIn: configured || onNetlify() ? checked : true,
+        signedIn: (await portalLocked()) ? checked : true,
         lockedFor: await lockedFor(),
       });
     } },
@@ -201,8 +205,17 @@ const routes = [
       if (productName.length > 200) throw new HttpError('Product name is too long (max 200 characters).');
 
       const id = crypto.randomUUID();
-      await createProduct({ id, productName, status: 'queued' });
+      await createProduct({ id, productName, keywords: pickedKeywords(ctx.body?.keywords), status: 'queued' });
       return json({ product: await finished(id) }, 201);
+    } },
+
+  // The keyword tick screen: live buyer queries for a niche, cached for a day,
+  // so ticking costs one round trip and never spends a model call.
+  { method: 'GET', pattern: '/keywords', handler: async (ctx) => {
+      const productName = String(ctx.query.get('q') || '').trim();
+      if (productName.length < 3) throw new HttpError('Enter a product name or niche (at least 3 characters) to look up keywords.');
+      if (productName.length > 200) throw new HttpError('Product name is too long (max 200 characters).');
+      return json(await keywordIdeas(productName));
     } },
 
   // The local server runs the job in this process; hosted, this path belongs to
@@ -379,7 +392,7 @@ export async function handleApi({ method, path, query, body, raw, cookie }) {
   // A hosted deployment is on the open internet, so it is locked from the first
   // request: the only way in is the set-once password screen. On your own
   // machine the portal stays usable until you choose to put a password on it.
-  const locked = (await passwordConfigured()) || onNetlify();
+  const locked = await portalLocked();
   if (!route.public && locked && !(await validSession(ctx.session))) {
     throw new HttpError('Sign in to use this portal.', 401);
   }

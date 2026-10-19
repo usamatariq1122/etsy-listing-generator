@@ -8,6 +8,10 @@ const LENS = ['sh', 'general'];
 const TTL_DAYS = 1;
 const TIMEOUT = 5000;
 const MAX_TERMS = 40;
+// A seller can tick as many as they like; the prompt is told to work through
+// them in order, so the list stays useful without running long.
+const MAX_PICKED = 20;
+const TAG_MAX = 20;
 
 // Extra seeds only when the product name does not already say it, so a query
 // like "crochet bucket hat pattern" is not asked twice.
@@ -98,7 +102,7 @@ function dropBrandPhrases(terms, productName) {
 
 /**
  * Buyer queries for one product name. Every seed/lens pair is looked up in
- * parallel and cached in MySQL for a day, so a niche costs one round trip.
+ * parallel and cached in the database for a day, so a niche costs one round trip.
  * Never fatal: when the network is unavailable the listing generates from the
  * model's own judgement, exactly as before.
  */
@@ -121,4 +125,34 @@ export async function buyerQueries(productName) {
 
   const kept = dropBrandPhrases(terms, productName);
   return { terms: kept.slice(0, MAX_TERMS), seeds, source: live ? 'autocomplete' : 'none' };
+}
+
+/**
+ * What the keyword tick screen shows: every suggestion with the two facts that
+ * decide its use — does it fit a marketplace tag, and did the lookup answer at
+ * all. With no network the list is empty and generating still works, because
+ * the model then falls back on its own judgement.
+ */
+export async function keywordIdeas(productName) {
+  const { terms, source, seeds } = await buyerQueries(productName);
+  return {
+    ideas: terms.map((term) => ({ term, chars: [...term].length, fitsTag: [...term].length <= TAG_MAX })),
+    seeds,
+    source,
+  };
+}
+
+/** Clean ticked keywords: trimmed, de-duplicated, never more than a handful. */
+export function pickedKeywords(value) {
+  const list = Array.isArray(value) ? value : [];
+  const seen = new Set();
+  const out = [];
+  for (const raw of list) {
+    const term = norm(raw);
+    if (!term || term.length > 60 || seen.has(term)) continue;
+    seen.add(term);
+    out.push(term);
+    if (out.length >= MAX_PICKED) break;
+  }
+  return out;
 }

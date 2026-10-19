@@ -6,20 +6,25 @@ Personal web portal that turns one product name into a complete listing package:
 - **File 2** — `etsy-listing-seo.pdf`, SEO title, 13 tags, description, category mapping, image placement guide, checklist
 - **7 image prompts** — written for you to run in any image tool, plus 7 upload slots that validate every file at 4:3 / min 2000px
 - **One ZIP** — the 2 PDFs plus the images you added, named `01-cover.jpg` … `07-license.jpg`
-- **History** — every product is stored in MySQL with a download link
+- **History** — every product is stored in Postgres with a download link
 
-Stack: React (Vite) · Node.js backend (no framework) · MySQL locally, Postgres when hosted ·
+Stack: React (Vite) · Node.js backend (no framework) · Postgres (Netlify managed) ·
 Gemini, Groq or OpenRouter for the text.
 
 ---
 
 ## 1. First-time setup
 
-1. **Start MySQL.** This build expects a local MySQL/MariaDB server — open the **XAMPP Control
-   Panel** and click **Start** next to **MySQL**. The app creates the
-   `etsy_listing_generator` database and `products` table automatically on first boot —
-   you do not need to run any SQL. Point `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD`
-   in `server/.env` at whatever server you run.
+The database is Postgres in both places. Hosted it is Netlify's managed Postgres; locally
+`netlify dev` starts an equivalent one for you, so nothing has to be installed or configured
+by hand — no MySQL, no XAMPP.
+
+1. **Install dependencies**:
+   ```bash
+   cd server && npm install
+   cd ../client && npm install
+   npm install -g netlify-cli      # local development runs on `netlify dev`
+   ```
 
 2. **Create your local files.** From the `server` folder run `npm run setup`. It copies
    `.env.example` to `.env`, and `src/masterPrompt.example.js` / `src/rules.example.js` to
@@ -42,44 +47,63 @@ Gemini, Groq or OpenRouter for the text.
    row instead of quietly breaking the provider that already works. `.env` is git-ignored;
    `.env.example` is the template.
 
-4. **Install dependencies**:
+4. **Set the key that encrypts your saved keys.** Anything you paste into **Settings → Access keys**
+   is written to the database encrypted (AES-256-GCM), and `ENCRYPTION_KEY` in `server/.env` is the
+   only copy of the code that reads it back:
    ```bash
-   cd server && npm install
-   cd ../client && npm install
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
    ```
+   Paste the result after `ENCRYPTION_KEY=`. Without it the portal still reads keys that were saved
+   earlier, but saving a new key is refused with a message asking you to set this first, so no key is
+   ever written in the clear.
 
-5. **Start the backend** — leave this terminal open:
+5. **Start everything** — one command, from the project root (not from `server/`):
    ```bash
-   cd server
-   npm run dev
+   netlify dev
    ```
-   You should see `MySQL ready: etsy_listing_generator @ 127.0.0.1:3306` and `API http://localhost:4000`.
+   It starts the local Postgres, builds both Functions and runs the Vite dev server. Leave this
+   terminal open.
 
-6. **Start the frontend** — in a second terminal:
-   ```bash
-   cd client
-   npm run dev
-   ```
+6. **Open** http://localhost:5173 — the local portal. `netlify dev` also prints port 8888; that one
+   serves the API only, because the deploy-only rules in `netlify.toml` (the catch-all redirect and
+   the security headers) break the Vite dev server when it is reached through 8888. The portal is not
+   password-protected until you create a password yourself in **Settings → Portal password**.
 
-7. **Open** http://localhost:5173
+<details>
+<summary>Running the API on its own (optional)</summary>
+
+`cd server && npm run dev` starts only the API on `http://localhost:4000`, serving `client/dist` if
+you have built it. It needs a Postgres of its own, so put `DATABASE_URL=postgres://…` in
+`server/.env` first. To develop the client against that API instead of `netlify dev`, start Vite with
+the proxy pointed at it: `VITE_API_TARGET=http://localhost:4000 npm run dev --prefix client`.
+
+</details>
 
 ---
 
 ## 2. Using it
 
-1. Type the product name or niche, e.g. `Crochet dragon pattern`, and click **Generate listing text**.
-   The text model writes File 1, File 2 and the 7 image prompts (30–60 seconds). That work runs as a
-   job, not inside the click: the portal starts it and then asks for the result until it arrives, so a
-   slow model or a strict proxy cannot lose the answer. The SEO title and the
-   13 tags are seeded from live search autocomplete, not invented. The notice bar afterwards names the
+1. Type the product name or niche, e.g. `Crochet dragon pattern`, and click **Find keyword ideas**.
+   The portal shows what shoppers actually type (live search autocomplete, cached for a day) with the
+   character count of each phrase and whether it fits a 20-character tag. Tick the ones you want to
+   use — **the first tick is treated as the main keyword** — then click **Generate listing text**.
+   Only the phrases you ticked are handed to the model. Leaving them all unticked keeps the old
+   behaviour: the portal gathers the queries itself and uses the whole list.
+   The text model then writes File 1, File 2 and the 7 image prompts (30–60 seconds). That work runs as
+   a job, not inside the click: the portal starts it and then asks for the result until it arrives, so a
+   slow model or a strict proxy cannot lose the answer. The notice bar afterwards names the
    model that answered, and how many busy models had to be skipped on the way to it.
-2. Make the 7 images with the prompts shown under **Listing text** — paste each prompt into the image
+2. Read the **SEO check** score under the listing text. It is a checklist of the marketplace's own
+   limits (13 tags, 20 characters per tag, no repeats) plus the two placement habits that matter, scored
+   against the keywords you ticked, with the reason next to every line. It is a checklist, not a
+   ranking guarantee, and it never says your listing will rank.
+3. Make the 7 images with the prompts shown under **Listing text** — paste each prompt into the image
    tool you like.
-3. Open **Listing images** and pick a file for each slot. Anything that is not 4:3 or is under
+4. Open **Listing images** and pick a file for each slot. Anything that is not 4:3 or is under
    2000px wide is refused with the reason, and nothing is saved.
-4. Click **Create ZIP**, then **Download ZIP**. Adding or replacing an image retires the old ZIP, so
+5. Click **Create ZIP**, then **Download ZIP**. Adding or replacing an image retires the old ZIP, so
    build it last.
-5. **History** in the top-right lists every past product with its download link. Click **Open** to resume one.
+6. **History** in the top-right lists every past product with its download link. Click **Open** to resume one.
 
 ---
 
@@ -146,6 +170,19 @@ costs one round trip.
 - Etsy's own suggestion call needs a browser session and passes through a bot check, so it cannot be
   called from the server. If the autocomplete call fails, generation continues exactly as it did
   before and simply reports fewer tags as verified.
+- `GET /api/keywords?q=<niche>` serves that same list to the tick screen (`KeywordPicker`), and the
+  phrases you tick are stored on the product as `selected_keywords`, so reopening it from History
+  shows what you picked. Unticked means the server looks the queries up itself, as before.
+
+**The SEO check panel.** `server/src/seoCheck.js` scores the finished title, tags and description
+against the keywords you ticked, after `repairSeo` and `alignSeo` have run — so it grades exactly the
+text you will copy into the marketplace, not the model's first draft. Six checks: the main keyword
+opens the title, the main keyword appears in the first two lines of the description, there are 13 tags,
+every tag is 20 characters or less, no tag repeats, and no tracked phrase is used more than 3 times.
+The score is the pass count, and every line carries its reason. "Ranking" is not a word it uses: the
+panel prints its own disclaimer that this is a checklist of the marketplace's limits and common search
+habits, not a ranking guarantee. The report is stored inside the product's `warnings` JSON, so a
+listing reopened from History still shows the score it earned.
 
 **Every prompt is sanitised twice over.** `normalizeShape` in `validate.js` runs each generated field
 through `scrubBranding` (which keeps only the configured brand) and, for the seven image prompts,
@@ -240,7 +277,8 @@ Etsy portal/
 │   ├── netlify/functions/
 │   │   ├── api.mjs       every /api/* route, as one Netlify Function
 │   │   └── run.mjs       the listing-text job, as a background Function
-│   ├── data/products/    ← generated text, your uploads and ZIPs when running locally
+│   ├── data/products/    ← generated PDFs, uploads and ZIPs when the API runs on its own; under
+│   │                       `netlify dev` those files live in Netlify's local Blobs instead
 │   └── src/
 │       ├── index.js          local node:http server, static client, error handler
 │       ├── api.js            the route table, shared by both runtimes
@@ -248,7 +286,9 @@ Etsy portal/
 │       ├── config.js         env parsing + requireKey()
 │       ├── apikeys.js        saved keys, brand and the grouped provider/model choice
 │       ├── modelCatalog.js   reads server/models.json on every request
-│       ├── db.js             MySQL (local) and Postgres (hosted) through one interface
+│       ├── db.js             Postgres: Netlify's managed database hosted, `netlify dev`'s locally
+│       ├── secrets.js        AES-256-GCM for the API keys stored in the database
+│       ├── headers.js        the four security headers, for API responses
 │       ├── files.js          listing files: disk locally, Netlify Blobs when hosted
 │       ├── generate.js       the listing-text job: run it, record the result or the failure
 │       ├── masterPrompt.js   your master prompt + the JSON output contract (git-ignored)
@@ -256,6 +296,7 @@ Etsy portal/
 │       ├── rules.js          banned word, branding, image rules (git-ignored)
 │       ├── rules.example.js  generic stand-in that `npm run setup` copies
 │       ├── keywords.js       live buyer queries + the keyword cache
+│       ├── seoCheck.js       the six-point SEO score for the finished title, tags and description
 │       ├── claude.js         Anthropic call (JSON prefill) + JSON extraction
 │       ├── gemini.js         one Gemini model call, structured output + friendly errors
 │       ├── groq.js           OpenAI-compatible Groq call (key from Settings or GROQ_API_KEY)
@@ -274,8 +315,8 @@ Etsy portal/
         ├── App.jsx           state, loading banners, error banners
         ├── api.js            fetch wrapper + the polling loop
         ├── labels.js         status labels
-        └── components/       Login, ProductForm, Workspace, TextPreview,
-                              UploadSlots, PackagePanel, HistoryView, SettingsView
+        └── components/       Login, ProductForm, KeywordPicker, Workspace, TextPreview,
+                              SeoScore, UploadSlots, PackagePanel, HistoryView, SettingsView
 ```
 
 ---
@@ -290,7 +331,8 @@ Etsy portal/
 | PUT | `/api/auth/password` | create the password (first time) or change it (needs the old one) |
 | GET | `/api/health` | which provider is asked first, and whether any key is missing at all |
 | GET | `/api/products` | history list |
-| POST | `/api/products` | create a product and queue its listing text |
+| POST | `/api/products` | create a product and queue its listing text — optional `keywords` array of the phrases you ticked |
+| GET | `/api/keywords?q=<niche>` | the tick screen's suggestions: each phrase, its length and whether it fits a tag |
 | POST | `/api/run/:id` | start (or restart) that product's listing-text job |
 | GET | `/api/products/:id` | one product with per-slot status; poll it until `status` is `text` or `failed` |
 | POST | `/api/products/:id/image/:slotId` | upload one listing image (raw JPG/PNG body) |
@@ -316,8 +358,15 @@ other endpoint with 401 until the first screen creates one.
 
 ## 8. Troubleshooting
 
-**"Cannot reach the server. Is the backend running on port 4000?"**
-Start the backend (setup step 4). The frontend proxies `/api` to `http://localhost:4000`.
+**"Cannot reach the server."**
+Local development runs on `netlify dev`: it serves the API and the local database on port 8888 and
+starts the Vite dev server on port 5173, which proxies `/api` to it. Open **http://localhost:5173**
+and edit files under `client/` as usual — 8888 is for the API only.
+
+**The page is blank on http://localhost:8888**
+8888 is the API. The catch-all redirect and the security headers in `netlify.toml` are written for a
+deploy, and both stop the Vite dev server from loading through that port. Open
+http://localhost:5173 instead.
 
 **"Sign in to use this portal."**
 The password screen is up because a password is set (or this copy is hosted). Five wrong tries in a
@@ -329,10 +378,19 @@ start the backend and run `node -e "import('./src/db.js').then(m => m.deleteSett
 from `server/` to clear it, then set a new one on the next screen. On Netlify, delete the
 `auth.password` row in the database's table view and reload the site.
 
-**"Could not connect to MySQL" on startup**
-1. Open XAMPP Control Panel → **Start** next to MySQL.
-2. Confirm `DB_USER=root` and `DB_PASSWORD=` (empty) in `server/.env` — those are the XAMPP defaults.
-3. If you set a MySQL root password in XAMPP, put it in `DB_PASSWORD`.
+**"Could not reach the database" on startup**
+1. Local development gets its Postgres from `netlify dev`, which starts one and hands the Functions
+   its URL. Starting `server/src/index.js` on its own needs `DATABASE_URL` in `server/.env`.
+2. Hosted, the project must have Netlify Database enabled (`netlify database status` says so), and
+   the schema in `netlify/database/migrations/` is applied by the deploy.
+3. `DB_PGSSL=require` or `DB_PGSSL=disable` only matter for a Postgres outside Netlify that disagrees
+   about TLS.
+
+**"Saved API keys are encrypted and ENCRYPTION_KEY is not set"**
+A key already in the database was written with an `ENCRYPTION_KEY` this build cannot see. Put the
+same value back in `server/.env` (locally) or in the Netlify site secret, then restart or redeploy.
+Keys saved *before* encryption existed are still readable without it, and are rewritten encrypted the
+first time the portal starts with a key set.
 
 **"ANTHROPIC_API_KEY is missing from server/.env"**
 Paste your key after `ANTHROPIC_API_KEY=` and **restart the backend**. The yellow banner at the
@@ -400,15 +458,14 @@ replaced an image afterwards, the old ZIP is deleted and the button reads **Crea
 it last.
 
 **I want to start with a clean history**
-Use **History → Clear all** in the browser; it removes the rows and the folders. The SQL equivalent
-has to go through `product_images` first, because MySQL refuses to truncate a table another table
-points at:
+Use **History → Clear all** in the browser; it removes the rows and the files. The SQL equivalent has
+to go through `product_images` first, because `products` is referenced by it:
 ```sql
-USE etsy_listing_generator;
 DELETE FROM product_images;
 DELETE FROM products;
 ```
-then delete the folders inside `server/data/products/`.
+Locally that is `netlify database connect` (or any client pointed at `DATABASE_URL`), then delete the
+folders inside `server/data/products/`.
 
 ---
 
@@ -422,9 +479,11 @@ publishes it, so changes made here appear on the site without any manual step.
 | React app | built by Vite into `client/dist`, served as static files |
 | `/api/*` | `server/netlify/functions/api.mjs` — the same route table the local server uses |
 | the listing-text job | `server/netlify/functions/run.mjs` — a background Function, so a 30–60 second model answer is never cut off |
-| products, settings, keyword cache | Netlify's managed Postgres (`DATABASE_URL` is provided automatically; the schema creates itself on first use) |
+| products, settings, keyword cache | Netlify's managed Postgres (`NETLIFY_DB_URL` is provided automatically; the schema comes from `netlify/database/migrations/` on deploy and creates itself on first use) |
 | PDFs, uploaded images, ZIPs | Netlify Blobs store `listing-files`, under `products/<id>/…` |
-| API keys | **Settings → Access keys** in the deployed app, which stores them in your database, or site secrets for `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` |
+| API keys | **Settings → Access keys** in the deployed app, which writes them to your database encrypted with AES-256-GCM, or site secrets for `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` |
+| the key that decrypts them | the `ENCRYPTION_KEY` site secret — never stored with the data it unlocks |
+| browser protection | CSP, HSTS, `X-Content-Type-Options` and `Referrer-Policy`, from `netlify.toml` on the static files and from `server/src/headers.js` on every API response |
 
 What changes when it is hosted:
 
@@ -442,7 +501,11 @@ What changes when it is hosted:
   own `masterPrompt.js` and `rules.js` (private repo, or uploaded into the deploy) before relying on it.
 - **Brand and keys are per-database.** A fresh deployment has the neutral placeholder brand and no
   keys; set them once in the deployed Settings and they are stored in that deployment's database.
-  Your local MySQL rows never travel to the site, and the git repository never sees any of them.
+  Your local Postgres rows never travel to the site, and the git repository never sees any of them.
+- **Set `ENCRYPTION_KEY` once.** Add it as a site secret (same generator command as in setup step 4)
+  and redeploy. From the next start, keys you save in Settings are stored encrypted, and any key row
+  that predates it is rewritten encrypted automatically. Leaving it out is supported: everything keeps
+  working, keys are simply kept in the clear.
 
 ### What it costs
 

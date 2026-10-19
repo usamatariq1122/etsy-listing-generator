@@ -211,3 +211,31 @@ table.manifest td.name { font-weight: 600; }
 .slot-body .row { margin-top: 10px; }
 .slot-body details { margin: 10px 0 0; }
 @media (max-width: 720px) { .slot { grid-template-columns: minmax(0, 1fr); } }
+
+/* Keyword tick list, and the score the finished listing fields earned. */
+.ticks {
+  list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px;
+  max-height: 320px; overflow-y: auto;
+}
+.tick {
+  display: flex; gap: 10px; align-items: center; padding: 9px 12px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--glass);
+}
+.tick:hover { border-color: var(--accent-glow); }
+.tick input { accent-color: var(--accent); flex: 0 0 auto; }
+.tick span { flex: 1 1 auto; min-width: 0; font-size: 14px; }
+.tick small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.tick .warn-text { color: #fbbf24; }
+.chips.picked li { border-color: var(--accent-soft); background: var(--ok-bg); color: #d1fae5; }
+
+.score { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.score small { font-size: 13px; color: var(--muted); font-weight: 600; }
+.score.ok { color: var(--accent); }
+.score.warn { color: #fbbf24; }
+.score.error { color: #fda4af; }
+.score-items { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
+.score-items li { border-left: 3px solid var(--line); padding: 2px 0 2px 12px; }
+.score-items li.pass { border-color: var(--ok-line); }
+.score-items li.fail { border-color: var(--err-line); }
+.score-items strong { display: block; font-size: 13.5px; }
+.score-items span { color: var(--muted); font-size: 13px; }

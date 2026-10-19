@@ -8,7 +8,7 @@ async function request(url, options = {}) {
   try {
     res = await fetch(url, options);
   } catch {
-    throw new Error('Cannot reach the server. Is the backend running on port 4000?');
+    throw new Error('Cannot reach the server. Run `netlify dev` from the project root and reload.');
   }
 
   const data = await parse(res);
@@ -40,12 +40,15 @@ export const api = {
   health: () => request('/api/health'),
   history: () => request('/api/products'),
   get: (id) => request(`/api/products/${id}`),
-  create: (productName) =>
+  create: (productName, keywords = []) =>
     request('/api/products', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productName }),
+      body: JSON.stringify({ productName, keywords }),
     }),
+  // Buyer queries for the tick screen. A niche repeats inside a day come from
+  // the server's cache, so this never hammers the autocomplete service.
+  keywords: (productName) => request(`/api/keywords?q=${encodeURIComponent(productName)}`),
   // Writing a listing takes longer than one request may live, so the browser
   // starts the job and then asks for the result until it is there.
   run: (id) => request(`/api/run/${id}`, { method: 'POST' }),

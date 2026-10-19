@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { config } from './config.js';
 import { DATA_DIR } from './paths.js';
 
 // One place decides where a listing's files live: the disk while you run this
@@ -8,7 +9,9 @@ import { DATA_DIR } from './paths.js';
 
 const STORE = 'listing-files';
 
-export const onNetlify = () => Boolean(process.env.NETLIFY || process.env.LAMBDA_TASK_ROOT);
+// Blobs whenever the app runs inside Netlify — deployed, or `netlify dev` with
+// its local sandbox. The disk path below is for the standalone local server.
+export const onNetlify = () => config.inNetlify;
 
 const store = () => import('@netlify/blobs').then(({ getStore }) => getStore({ name: STORE, consistency: 'strong' }));
 

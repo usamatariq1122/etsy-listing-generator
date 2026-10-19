@@ -1,6 +1,7 @@
 import TextPreview from './TextPreview.jsx';
 import UploadSlots from './UploadSlots.jsx';
 import PackagePanel from './PackagePanel.jsx';
+import SeoScore from './SeoScore.jsx';
 
 export default function Workspace({
   product,
@@ -38,6 +39,8 @@ export default function Workspace({
           <p className="muted">No text yet. Click “Rewrite text” to generate it.</p>
         )}
       </section>
+
+      <SeoScore check={product.warnings?.seoCheck} />
 
       <section className="card">
         <h2>Listing images</h2>

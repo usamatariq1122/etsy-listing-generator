@@ -1,14 +1,24 @@
 import { handleApi } from '../../src/api.js';
 import { initDb } from '../../src/db.js';
+import { encryptStoredKeys } from '../../src/secrets.js';
+import { SECURITY_HEADERS } from '../../src/headers.js';
 
 // Every /api/* route except the generation job, which needs longer than a
 // normal invocation and lives in run.mjs.
 
-let schema;
+let ready;
+
+/** Once per cold start: make sure the schema is there, then seal any key row
+ *  that was stored before ENCRYPTION_KEY existed. */
+async function boot() {
+  await initDb();
+  const sealed = await encryptStoredKeys();
+  if (sealed) console.log(`[secrets] encrypted ${sealed} stored key(s)`);
+}
 
 export default async (request) => {
-  schema ??= initDb().catch((error) => console.error('[db]', error.message));
-  await schema;
+  ready ??= boot().catch((error) => console.error('[db]', error.message));
+  await ready;
 
   const url = new URL(request.url);
   const method = request.method.toUpperCase();
@@ -33,13 +43,16 @@ export default async (request) => {
       raw,
       cookie: request.headers.get('cookie'),
     });
-    return new Response(result.body, { status: result.status, headers: result.headers });
+    return new Response(result.body, {
+      status: result.status,
+      headers: { ...SECURITY_HEADERS, ...result.headers },
+    });
   } catch (error) {
     const status = error.status || 500;
     if (status >= 500) console.error('[api]', error);
     return Response.json(
       { error: error.message || 'Something went wrong.', ...(error.issues ? { issues: error.issues } : {}) },
-      { status },
+      { status, headers: SECURITY_HEADERS },
     );
   }
 };

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { getSetting, setSetting } from './db.js';
-import { onNetlify } from './files.js';
+import { config } from './config.js';
 
 // One password, stored as a salted scrypt hash in the settings table, guards
 // every endpoint. The portal spends your model quota, so a hosted
@@ -50,6 +50,13 @@ export async function setPassword(password) {
 
 export async function passwordConfigured() {
   return Boolean(await getSetting(PASSWORD));
+}
+
+/** Whether the portal must demand a signed-in session: a stored password, or a
+ *  deploy on the open internet with no password yet. `netlify dev` and the
+ *  standalone server stay open so local work needs no login. */
+export async function portalLocked() {
+  return (await passwordConfigured()) || config.deployed;
 }
 
 export async function verifyPassword(password) {
@@ -111,7 +118,9 @@ export function sessionCookie(token, maxAgeSeconds = SESSION_DAYS * 86400) {
     'Path=/',
     'HttpOnly',
     'SameSite=Lax',
-    onNetlify() ? 'Secure' : null,
+    // Only a deploy is served over https; `netlify dev` is plain http on
+    // localhost, where a Secure cookie would never come back.
+    config.deployed ? 'Secure' : null,
     `Max-Age=${maxAgeSeconds}`,
   ]
     .filter(Boolean)

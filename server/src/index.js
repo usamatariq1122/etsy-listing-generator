@@ -4,12 +4,17 @@ import path from 'node:path';
 import { config } from './config.js';
 import { selectedModel } from './apikeys.js';
 import { initDb } from './db.js';
+import { encryptStoredKeys } from './secrets.js';
+import { SECURITY_HEADERS } from './headers.js';
 import { IMAGE_RULES } from './rules.js';
 import { DATA_DIR, SERVER_ROOT } from './paths.js';
 import { handleApi } from './api.js';
 
-// The local dev server. Hosted, the same handleApi is reached through a Netlify
-// Function instead, so this file only exists for running it on your own machine.
+// The local dev server, for running the API on its own. Hosted, the same
+// handleApi is reached through a Netlify Function instead. Day-to-day local
+// work goes through `netlify dev`, which provides the database; this entry
+// point is useful when you only want the API on :4000 and point DATABASE_URL
+// at a Postgres of your own.
 
 const clientDist = path.resolve(SERVER_ROOT, '..', 'client', 'dist');
 const STATIC_TYPES = {
@@ -43,7 +48,11 @@ function readBody(req) {
 
 function send(res, result) {
   const status = result.status || 200;
-  res.writeHead(status, { ...result.headers, 'access-control-allow-origin': '*' });
+  res.writeHead(status, {
+    ...SECURITY_HEADERS,
+    ...result.headers,
+    'access-control-allow-origin': '*',
+  });
   res.end(result.body ?? undefined);
 }
 
@@ -99,13 +108,15 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 async function start() {
   try {
     await initDb();
-    console.log(`MySQL ready: ${config.db.database} @ ${config.db.host}:${config.db.port}`);
+    const sealed = await encryptStoredKeys();
+    if (sealed) console.log(`Encrypted ${sealed} stored API key(s).`);
   } catch (error) {
-    console.error('\nCould not connect to MySQL.');
+    console.error('\nCould not reach the database.');
     console.error(`  ${error.message}`);
-    console.error('\n  1. Open the XAMPP Control Panel and click Start next to MySQL.');
-    console.error(`  2. Check DB_HOST / DB_PORT / DB_USER / DB_PASSWORD in ${path.join(SERVER_ROOT, '.env')}`);
-    console.error('  3. Default XAMPP login is user "root" with an empty password.\n');
+    console.error('\n  1. Normal local development is `netlify dev` from the project root: it starts');
+    console.error('     Postgres, runs the functions and serves the client on one port.');
+    console.error(`  2. Running this file on its own needs DATABASE_URL in ${path.join(SERVER_ROOT, '.env')}`);
+    console.error('     pointing at a Postgres server.\n');
     process.exit(1);
   }
 

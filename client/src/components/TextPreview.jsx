@@ -24,8 +24,14 @@ export default function TextPreview({ product }) {
       {terms.length > 0 && (
         <details className="keywords">
           <summary>
-            Buyer queries used for the title and tags
-            <span className="muted small">{keywords.source === 'autocomplete' ? 'live search data' : 'from model judgement'}</span>
+            Keywords used for the title and tags
+            <span className="muted small">
+              {keywords.source === 'picked'
+                ? 'the ones you ticked'
+                : keywords.source === 'autocomplete'
+                  ? 'live search data'
+                  : 'from model judgement'}
+            </span>
           </summary>
           <ul className="chips">
             {terms.map((term) => (
