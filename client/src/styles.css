@@ -210,7 +210,12 @@ table.manifest td.name { font-weight: 600; }
 .slot-body > p { margin: 4px 0; }
 .slot-body .row { margin-top: 10px; }
 .slot-body details { margin: 10px 0 0; }
-@media (max-width: 720px) { .slot { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 720px) {
+  .slot { grid-template-columns: minmax(0, 1fr); }
+  .slot-preview { max-height: 150px; }
+}
+/* Two slots side by side on a wide screen, so seven of them do not become a column. */
+@media (min-width: 1180px) { .slots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* Keyword tick list, and the score the finished listing fields earned. */
 .ticks {
@@ -239,3 +244,13 @@ table.manifest td.name { font-weight: 600; }
 .score-items li.fail { border-color: var(--err-line); }
 .score-items strong { display: block; font-size: 13.5px; }
 .score-items span { color: var(--muted); font-size: 13px; }
+
+/* Collapsible panels, so the long lists stay out of the way until asked for. */
+.drop { padding: 0; }
+.drop > summary { padding: 12px 14px; }
+.drop[open] > summary { border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.drop > summary:hover { background: rgba(255, 255, 255, 0.04); }
+.drop > *:not(summary) { margin-left: 14px; margin-right: 14px; }
+.drop > .row { margin-bottom: 14px; }
+.drop .score-items { margin: 0 14px 14px; }
+.drop-meta { color: var(--muted); font-size: 12.5px; font-weight: 500; font-style: normal; }

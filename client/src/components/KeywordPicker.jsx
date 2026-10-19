@@ -7,6 +7,7 @@ export default function KeywordPicker({ productName, busy, picked, onPicked }) {
   const [ideas, setIdeas] = useState(null);
   const [lookedUp, setLookedUp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState(null);
 
   async function lookup() {
@@ -21,6 +22,7 @@ export default function KeywordPicker({ productName, busy, picked, onPicked }) {
       const data = await api.keywords(name);
       setIdeas(data.ideas);
       setLookedUp(name);
+      setOpen(true);
     } catch (err) {
       setError(err.message);
       setIdeas(null);
@@ -70,31 +72,6 @@ export default function KeywordPicker({ productName, busy, picked, onPicked }) {
 
       {ideas?.length > 0 && (
         <>
-          <p className="muted small">
-            Tick the phrases to use. The first tick is treated as the main keyword, so tick that one first.
-            A phrase over 20 characters still works in the title and description, just not as a tag.
-          </p>
-          <div className="ticks">
-            {ideas.map((idea) => (
-              <label className="tick" key={idea.term}>
-                <input type="checkbox" checked={picked.includes(idea.term)} onChange={() => toggle(idea.term)} />
-                <span>{idea.term}</span>
-                <small className={idea.fitsTag ? 'muted' : 'warn-text'}>
-                  {idea.chars} {idea.fitsTag ? 'fits a tag' : 'too long for a tag'}
-                </small>
-              </label>
-            ))}
-          </div>
-          <div className="row">
-            <button type="button" onClick={tickFitting} disabled={!fitting.length}>
-              Tick all that fit a tag
-            </button>
-            {picked.length > 0 && (
-              <button type="button" onClick={() => onPicked([])}>
-                Clear picks
-              </button>
-            )}
-          </div>
           {picked.length > 0 && (
             <ul className="chips picked">
               {picked.map((term, i) => (
@@ -104,6 +81,41 @@ export default function KeywordPicker({ productName, busy, picked, onPicked }) {
               ))}
             </ul>
           )}
+
+          <details className="drop" open={open} onToggle={(event) => setOpen(event.target.open)}>
+            <summary>
+              <span>Phrases shoppers type</span>
+              <em className="drop-meta">
+                {picked.length} of {ideas.length} ticked
+              </em>
+            </summary>
+
+            <p className="muted small">
+              Tick the phrases to use. The first tick is treated as the main keyword, so tick that one first.
+              A phrase over 20 characters still works in the title and description, just not as a tag.
+            </p>
+            <div className="ticks">
+              {ideas.map((idea) => (
+                <label className="tick" key={idea.term}>
+                  <input type="checkbox" checked={picked.includes(idea.term)} onChange={() => toggle(idea.term)} />
+                  <span>{idea.term}</span>
+                  <small className={idea.fitsTag ? 'muted' : 'warn-text'}>
+                    {idea.chars} {idea.fitsTag ? 'fits a tag' : 'too long for a tag'}
+                  </small>
+                </label>
+              ))}
+            </div>
+            <div className="row">
+              <button type="button" onClick={tickFitting} disabled={!fitting.length}>
+                Tick all that fit a tag
+              </button>
+              {picked.length > 0 && (
+                <button type="button" onClick={() => onPicked([])}>
+                  Clear picks
+                </button>
+              )}
+            </div>
+          </details>
         </>
       )}
     </div>

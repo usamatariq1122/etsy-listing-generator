@@ -41,21 +41,27 @@ export default function TextPreview({ product }) {
         </details>
       )}
 
-      {TEXT_FILES.map((file) => (
-        <details key={file.key} open={file.key === 'file1_text'}>
-          <summary>
-            <span>{file.title}</span>
-            <a
-              className="download"
-              href={`/api/products/${product.id}/text/${file.key}`}
-              download={file.name}
-            >
-              Download {file.name}
-            </a>
-          </summary>
-          <pre className="textdump">{product[file.field] || '(empty)'}</pre>
-        </details>
-      ))}
+      {TEXT_FILES.map((file) => {
+        const text = product[file.field] || '';
+        const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+        return (
+          <details key={file.key} className="drop">
+            <summary>
+              <span>{file.title}</span>
+              <em className="drop-meta">{words ? `${words} words` : 'nothing yet'}</em>
+              <a
+                className="download"
+                href={`/api/products/${product.id}/text/${file.key}`}
+                download={file.name}
+                onClick={(event) => event.stopPropagation()}
+              >
+                Download
+              </a>
+            </summary>
+            <pre className="textdump">{text || '(empty)'}</pre>
+          </details>
+        );
+      })}
 
       {PROMPT_GROUPS.map((group) => {
         const prompts = product[group.field] || [];

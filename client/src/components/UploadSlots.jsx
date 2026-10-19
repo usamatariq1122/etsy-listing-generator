@@ -55,42 +55,42 @@ export default function UploadSlots({ product, busy, onUpload, onRemove }) {
 
               <div className="slot-body">
                 <div className="row-between">
-                  <strong>{slot.label}</strong>
-                  {image && (
-                    <button className="small danger" onClick={() => onRemove(slot)} disabled={Boolean(busy)}>
-                      Remove
-                    </button>
-                  )}
-                </div>
-                <p className="muted small">{slot.hint}</p>
-
-                {image ? (
-                  <p className="small">
-                    {image.width} × {image.height}px · {(image.bytes / MB).toFixed(1)} MB · packed as{' '}
-                    <strong>{image.fileName}</strong>
-                  </p>
-                ) : (
-                  <p className="muted small">Empty.</p>
-                )}
-
-                <div className="row">
-                  <label className="button small">
-                    {image ? 'Replace image' : 'Choose image'}
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png"
-                      hidden
-                      disabled={disabled}
-                      onChange={(event) => pick(slot, event)}
-                    />
-                  </label>
-                  {working === slot.id && <span className="muted small">Checking size and shape…</span>}
+                  <div>
+                    <strong>{slot.label}</strong>
+                    <p className="muted small">
+                      {image
+                        ? `${image.width} × ${image.height}px · ${(image.bytes / MB).toFixed(1)} MB · packed as ${image.fileName}`
+                        : 'Nothing uploaded yet.'}
+                      {working === slot.id && ' Checking size and shape…'}
+                    </p>
+                  </div>
+                  <div className="row">
+                    <label className="button small">
+                      {image ? 'Replace image' : 'Choose image'}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        hidden
+                        disabled={disabled}
+                        onChange={(event) => pick(slot, event)}
+                      />
+                    </label>
+                    {image && (
+                      <button className="small danger" onClick={() => onRemove(slot)} disabled={Boolean(busy)}>
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {prompt && (
-                  <details>
-                    <summary>Prompt for this image</summary>
-                    <pre className="textdump">{prompt}</pre>
+                {(slot.hint || prompt) && (
+                  <details className="drop">
+                    <summary>
+                      <span>What this image is for</span>
+                      {prompt && <em className="drop-meta">prompt included</em>}
+                    </summary>
+                    {slot.hint && <p className="muted small">{slot.hint}</p>}
+                    {prompt && <pre className="textdump">{prompt}</pre>}
                   </details>
                 )}
               </div>
