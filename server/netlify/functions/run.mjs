@@ -10,7 +10,8 @@ import { readSession, validSession } from '../../src/auth.js';
 let schema;
 
 export default async (request) => {
-  const { id } = request.params ?? {};
+  // A background invocation gets no params object, so the id comes off the URL.
+  const id = new URL(request.url).pathname.split('/').filter(Boolean).pop();
   if (!id || !isSafeId(id)) return;
 
   schema ??= initDb().catch((error) => console.error('[db]', error.message));
