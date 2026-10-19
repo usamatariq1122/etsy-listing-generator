@@ -3,7 +3,7 @@ import { getSetting, setSetting } from './db.js';
 import { onNetlify } from './files.js';
 
 // One password, stored as a salted scrypt hash in the settings table, guards
-// every endpoint. The portal spends your Gemini and Groq quota, so a hosted
+// every endpoint. The portal spends your model quota, so a hosted
 // build must never be reachable by whoever finds the URL.
 
 const PASSWORD = 'auth.password';

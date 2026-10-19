@@ -3,9 +3,9 @@ import { config } from './config.js';
 import { brandName } from './brand.js';
 import { modelCatalog } from './modelCatalog.js';
 
-const PROVIDERS = ['gemini', 'anthropic', 'groq'];
+export const PROVIDERS = ['gemini', 'anthropic', 'groq', 'openrouter'];
 // The provider groups the Settings dropdown offers. Claude stays a .env choice.
-const SELECTABLE = ['gemini', 'groq'];
+const SELECTABLE = ['gemini', 'groq', 'openrouter'];
 
 const settingKey = (provider) => `api_key.${provider}`;
 const modelSetting = (provider) => `text_model.${provider}`;
@@ -15,9 +15,10 @@ const ENV_KEYS = {
   gemini: () => config.gemini.apiKey,
   anthropic: () => config.anthropic.apiKey,
   groq: () => config.groq.apiKey,
+  openrouter: () => config.openrouter.apiKey,
 };
 const envKey = (provider) => (ENV_KEYS[provider] ?? (() => ''))();
-const ENV_VARS = { gemini: 'GEMINI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', groq: 'GROQ_API_KEY' };
+const ENV_VARS = { gemini: 'GEMINI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', groq: 'GROQ_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
 const envVar = (provider) => ENV_VARS[provider] ?? 'API key';
 const unusable = (key) => !key || /your-key-here/i.test(key);
 
@@ -25,6 +26,7 @@ const ENV_MODELS = {
   gemini: () => config.gemini.textModel,
   anthropic: () => config.anthropic.model,
   groq: () => config.groq.model,
+  openrouter: () => config.openrouter.model,
 };
 
 // Groq can be asked first from the dropdown, but TEXT_PROVIDER still only
@@ -68,7 +70,7 @@ export async function selectedModel() {
 export async function saveModel(provider, model) {
   const value = String(model ?? '').trim();
   if (!SELECTABLE.includes(provider)) {
-    const err = new Error('Only a Gemini or Groq model can be chosen here.');
+    const err = new Error('Only a Gemini, Groq or OpenRouter model can be chosen here.');
     err.status = 400;
     throw err;
   }
@@ -124,9 +126,10 @@ export async function requireKey(provider = activeProvider()) {
 // Each service hands out a visibly different key, so a paste into the wrong row
 // can be caught here instead of turning into a confusing provider error later.
 const WRONG_PREFIX = {
-  gemini: { gsk_: 'Groq', 'sk-ant-': 'Anthropic' },
-  groq: { 'AQ.': 'Google AI Studio', AIza: 'Google AI Studio', 'sk-ant-': 'Anthropic' },
-  anthropic: { gsk_: 'Groq', 'AQ.': 'Google AI Studio', AIza: 'Google AI Studio' },
+  gemini: { gsk_: 'Groq', 'sk-ant-': 'Anthropic', 'sk-or-': 'OpenRouter' },
+  groq: { 'AQ.': 'Google AI Studio', AIza: 'Google AI Studio', 'sk-ant-': 'Anthropic', 'sk-or-': 'OpenRouter' },
+  anthropic: { gsk_: 'Groq', 'AQ.': 'Google AI Studio', AIza: 'Google AI Studio', 'sk-or-': 'OpenRouter' },
+  openrouter: { gsk_: 'Groq', 'sk-ant-': 'Anthropic', 'AQ.': 'Google AI Studio', AIza: 'Google AI Studio' },
 };
 
 /** Problems with a pasted key, so a typo is caught here instead of at generate time. */
@@ -155,7 +158,7 @@ export async function removeKey(provider) {
 
 /**
  * Which provider a generation starts with, and the providers whose missing key
- * stops any listing. Each of the two dropdown providers covers for the other,
+ * stops any listing. Each dropdown provider covers for the others,
  * so only none-configured blocks the studio.
  */
 export async function keyCoverage() {

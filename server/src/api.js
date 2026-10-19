@@ -16,7 +16,7 @@ import { contentTypeFor, deleteFile, deletePrefix, getFile, onNetlify } from './
 import { TEXT_FILES } from './documents.js';
 import { buildZip, documentBytes } from './zip.js';
 import { startGeneration } from './generate.js';
-import { keyCoverage, keyIssues, keyStatus, removeKey, removeModel, saveKey, saveModel } from './apikeys.js';
+import { keyCoverage, keyIssues, keyStatus, PROVIDERS, removeKey, removeModel, saveKey, saveModel } from './apikeys.js';
 import { brandIssues, clearBrand, saveBrand } from './brand.js';
 import {
   clearFailures,
@@ -339,8 +339,6 @@ const routes = [
       return json({ removed: true, ...(await keyStatus()) });
     } },
 ];
-
-const PROVIDERS = ['gemini', 'anthropic', 'groq'];
 
 function pickProvider(ctx) {
   const provider = String(ctx.body?.provider || ctx.query.get('provider') || '').toLowerCase();

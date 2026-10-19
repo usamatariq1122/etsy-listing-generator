@@ -46,7 +46,7 @@ export default function Login({ status, onSignedIn }) {
 
           {settingUp ? (
             <p className="muted">
-              This portal spends your Gemini and Groq quota on every generation, so it asks for a
+              This portal spends your model quota on every generation, so it asks for a
               password before anything else works. It is stored as a hash in the database and shown to
               nobody; you can change it later in Settings. Pick something you will remember - there is
               no email reset.

@@ -13,7 +13,7 @@ const QUOTA_PROBLEM = /quota|429|rate limit|no free requests/i;
 
 /** What to click next, given who wrote the guide. */
 function rewriteHint(quality) {
-  if (quality.provider === 'groq') return ', or pick a Gemini model in Settings so Gemini writes the guide';
+  if (quality.provider && quality.provider !== 'gemini') return ', or pick a Gemini model in Settings so Gemini writes the guide';
   if (/lite/i.test(quality.model || '')) return ', or choose a full-size model in Settings';
   return '';
 }

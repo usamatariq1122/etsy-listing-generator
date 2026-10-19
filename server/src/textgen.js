@@ -2,6 +2,7 @@ import { config } from './config.js';
 import { callClaude } from './claude.js';
 import { callGeminiText } from './gemini.js';
 import { callGroqText } from './groq.js';
+import { callOpenRouterText } from './openrouter.js';
 import { hasKey, modelChoices, resolveModel, selectedModel } from './apikeys.js';
 
 // A saturated or exhausted model gives up within seconds, and the free tier
@@ -21,10 +22,10 @@ const cap = (text) => String(text).charAt(0).toUpperCase() + String(text).slice(
 
 /**
  * Dispatches text generation to the provider chosen in Settings and hands the
- * job to the other one when it declines: the Gemini models are walked from the
- * chosen one down to lite, or Groq is asked with the selected model. Resolves to
- * the package JSON plus which provider and model wrote it and which Gemini
- * models had to be skipped, so the caller can say so out loud.
+ * job to the others when it declines: the Gemini models are walked from the
+ * chosen one down to lite, Groq and OpenRouter are asked with their own selected
+ * model. Resolves to the package JSON plus which provider and model wrote it and
+ * which Gemini models had to be skipped, so the caller can say so out loud.
  */
 export async function callTextModel(productName, brand, keywords = []) {
   if (config.textProvider === 'anthropic') {
@@ -75,10 +76,26 @@ export async function callTextModel(productName, brand, keywords = []) {
     }
   }
 
-  const attempts =
-    choice.provider === 'groq'
-      ? [() => viaGroq(choice.model), async () => viaGemini(await resolveModel('gemini'))]
-      : [() => viaGemini(choice.model), async () => viaGroq(await resolveModel('groq'))];
+  async function viaOpenRouter(model) {
+    const who = `OpenRouter (${model})`;
+    if (!(await hasKey('openrouter'))) {
+      return note({ who, called: false, detail: 'no OpenRouter API key is saved, so it was not asked' });
+    }
+    try {
+      return { json: await callOpenRouterText(productName, brand, keywords, model), provider: 'openrouter', model };
+    } catch (error) {
+      return note({ who, detail: error.message, status: error?.status });
+    }
+  }
+
+  // The chosen provider is asked with the chosen model, then the others walk
+  // down to their own default.
+  const runners = { gemini: viaGemini, groq: viaGroq, openrouter: viaOpenRouter };
+  const order = [choice.provider, ...Object.keys(runners).filter((provider) => provider !== choice.provider)];
+  const attempts = order.map(
+    (provider) => async () =>
+      runners[provider](provider === choice.provider ? choice.model : await resolveModel(provider)),
+  );
 
   for (const attempt of attempts) {
     const hit = await attempt();
@@ -92,7 +109,7 @@ export async function callTextModel(productName, brand, keywords = []) {
 
   const [lead, ...rest] = declined;
   const tail = rest.map((entry) => `Then ${entry.who}: ${entry.detail}`).join(' ');
-  const err = new Error(`Neither provider wrote the listing. ${cap(lead.detail)}${tail ? ` ${tail}` : ''}`);
+  const err = new Error(`No provider wrote the listing. ${cap(lead.detail)}${tail ? ` ${tail}` : ''}`);
   err.status = declined.find((entry) => entry.status === 401)?.status ?? 503;
   throw err;
 }

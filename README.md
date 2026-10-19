@@ -9,7 +9,7 @@ Personal web portal that turns one product name into a complete listing package:
 - **History** — every product is stored in MySQL with a download link
 
 Stack: React (Vite) · Node.js backend (no framework) · MySQL locally, Postgres when hosted ·
-Gemini or Groq for the text.
+Gemini, Groq or OpenRouter for the text.
 
 ---
 
@@ -34,12 +34,13 @@ Gemini or Groq for the text.
    Anthropic works too — set `ANTHROPIC_API_KEY` and `TEXT_PROVIDER=anthropic`. The provider and
    model can also be changed from the **Settings** tab in the browser, which stores them in the
    database and uses them from the next request without a restart.
-   Optional: add a **Groq** key as the second provider — see section 4. Paste it in **Settings →
-   Access keys**, or put `GROQ_API_KEY` (and, if you like, `GROQ_MODEL`) in this file instead.
+   Optional: add a **Groq** or **OpenRouter** key as another provider — see section 4. Paste it in
+   **Settings → Access keys**, or put `GROQ_API_KEY` / `OPENROUTER_API_KEY` (and, if you like,
+   `GROQ_MODEL` / `OPENROUTER_MODEL`) in this file instead.
    Keys never leave the backend: the browser only ever sees the last 4 characters, and a key whose
-   format belongs to another service (`gsk_…`, `AQ.…`, `sk-ant-…`) is refused in the wrong row instead
-   of quietly breaking the provider that already works. `.env` is git-ignored; `.env.example` is the
-   template.
+   format belongs to another service (`gsk_…`, `AQ.…`, `sk-ant-…`, `sk-or-…`) is refused in the wrong
+   row instead of quietly breaking the provider that already works. `.env` is git-ignored;
+   `.env.example` is the template.
 
 4. **Install dependencies**:
    ```bash
@@ -151,24 +152,28 @@ through `scrubBranding` (which keeps only the configured brand) and, for the sev
 through `scrubBannedWord` as well. A prompt therefore cannot carry another shop's name or the
 marketplace word into the image tool you paste it into, whatever the model decided to write.
 
-**Model failover.** Settings has one model dropdown with two groups — **Gemini** and **Groq** — and the
-choice remembers which provider owns the model (`server/src/apikeys.js`, `selectedModel`). Whichever
-group you pick in, that provider is asked first; the other one is the carry-over.
+**Model failover.** Settings has one model dropdown with three groups — **Gemini**, **Groq** and
+**OpenRouter** — and the choice remembers which provider owns the model
+(`server/src/apikeys.js`, `selectedModel`). Whichever group you pick in, that provider is asked first;
+the others are the carry-over, in the order Gemini → Groq → OpenRouter.
 
 - A **Gemini** model chosen: `server/src/textgen.js` walks the Gemini list from best to lite, trying
   the next model whenever an answer says *this model cannot help right now* — a 503 high-demand
   rejection, a 429 quota exhaustion, or a 200 that carries no text at all. Only when the whole chain
-  is dry does it ask **Groq**.
+  is dry does it ask **Groq**, and then **OpenRouter**.
 - A **Groq** model chosen: that model is called through the OpenAI-compatible endpoint
-  (`server/src/groq.js`); if it declines, the Gemini chain above is run instead.
+  (`server/src/groq.js`); if it declines, the Gemini chain above is run, then OpenRouter.
+- An **OpenRouter** model chosen: it is called through OpenRouter's OpenAI-compatible gateway
+  (`server/src/openrouter.js`), which reaches any model in its catalogue under one key. If it
+  declines, the Gemini chain runs, then Groq.
 
-A problem that is yours to fix (a malformed answer, or a missing or invalid key when the other
-provider has no key either) is never swallowed by a failover; it is reported straight away. A provider
-with no saved key is simply skipped, so a dead Gemini key is covered by a saved Groq key and vice
-versa. The model names in each group come from **`server/models.json`**, which is re-read on every
-request: add or remove a name there and it appears in the dropdown on the next page load, with no
-code change and no restart. `GEMINI_TEXT_MODEL` / `GROQ_MODEL` in `server/.env` only choose which
-name of a group is asked first when nothing is picked in Settings.
+A problem that is yours to fix (a malformed answer, or a missing or invalid key when no other
+provider has a key either) is never swallowed by a failover; it is reported straight away. A provider
+with no saved key is simply skipped, so a dead Gemini key is covered by a saved Groq or OpenRouter key
+and vice versa. The model names in each group come from **`server/models.json`**, which is re-read on
+every request: add or remove a name there and it appears in the dropdown on the next page load, with
+no code change and no restart. `GEMINI_TEXT_MODEL` / `GROQ_MODEL` / `OPENROUTER_MODEL` in
+`server/.env` only choose which name of a group is asked first when nothing is picked in Settings.
 
 Either way the notice bar says who answered: `Written by gemini-3.5-flash, after
 2 busy model(s) were skipped`, or `Written by Groq (llama-3.3-70b-versatile), after 4 busy model(s)
@@ -179,7 +184,7 @@ were skipped`.
 - the notice bar always says which provider and model wrote the text, and how many busy models were skipped
 - a **flash-lite** Gemini answer is flagged even when it is long enough, because that model writes thin guides
 - a File 1 under **900 words** is flagged with the model name and the exact word count — the same rule
-  applies to a Groq answer, whichever provider was asked first
+  applies to a Groq or OpenRouter answer, whichever provider was asked first
 - when either applies, **no PDF is rendered** — the warning banner says so, the manifest in
   **Package and download** reads `⚠ not printed`, and clicking **Create ZIP** is what prints them,
   so a short guide can never reach a buyer by accident
@@ -254,6 +259,7 @@ Etsy portal/
 │       ├── claude.js         Anthropic call (JSON prefill) + JSON extraction
 │       ├── gemini.js         one Gemini model call, structured output + friendly errors
 │       ├── groq.js           OpenAI-compatible Groq call (key from Settings or GROQ_API_KEY)
+│       ├── openrouter.js     OpenAI-compatible OpenRouter call (key from Settings or OPENROUTER_API_KEY)
 │       ├── textgen.js        provider dispatch in the chosen order, model failover
 │       ├── retry.js          transient-failure retry with a time budget
 │       ├── validate.js       File 1 cleaning/validation, SEO repair and alignment
@@ -295,7 +301,7 @@ Etsy portal/
 | GET | `/api/products/:id/text/:fileKey` | download `file1_text` or `file2_text` |
 | GET | `/api/products/slots` | the 7 slot definitions + image rules |
 | GET | `/api/settings` | provider, saved key status and available models |
-| PUT | `/api/settings/key` | save a provider key — `gemini`, `anthropic` or `groq` (applies to the next request) |
+| PUT | `/api/settings/key` | save a provider key — `gemini`, `anthropic`, `groq` or `openrouter` (applies to the next request) |
 | DELETE | `/api/settings/key` | remove the saved key and fall back to `.env` |
 | PUT | `/api/settings/model` | choose which text model to call |
 | DELETE | `/api/settings/model` | go back to the `.env` model |
@@ -335,14 +341,15 @@ top of the page tells you which key is missing.
 **"No free requests left today"**
 Gemini counts the free daily quota per model, and a new key on the same Google project shares that
 count, so a fresh key does not always reset it. The portal already moves on to the next model by
-itself, then to the other provider if its key is saved, so you only see this when both are dry.
+itself, then to the other providers if their keys are saved, so you only see this when all of them are
+dry.
 Settings → Model still decides which model is asked first. `gemini-*-flash-lite` models answer
 sooner but write noticeably shorter guides than the 900-1,300 words the prompt asks for, so a lite
 answer is always flagged and no PDF is printed for it.
 
-**"Neither provider wrote the listing"**
-Both providers declined, and the message carries each one's own reason, starting with the provider you
-chose in the dropdown:
+**"No provider wrote the listing"**
+Every provider with a key declined, and the message carries each one's own reason, starting with the
+provider you chose in the dropdown:
 - *Groq rejected the API key* — the key is wrong or from another service; paste the right one in
   **Settings → Access keys**, or fix `GROQ_API_KEY` in `server/.env` and restart. (A `gsk_…` key is a
   Groq key — it does not belong in the Gemini row.)
@@ -350,15 +357,22 @@ chose in the dropdown:
   the Groq group of the dropdown, or add it to `server/models.json`.
 - *Groq is out of requests too* — genuine rate limiting on Groq's side; wait a minute and click
   **Rewrite text**.
-- *No Gemini API key is saved* / *No Groq API key is saved* — that provider was skipped, not called.
-If you would rather not use one of them, remove its key in Settings and the portal uses the other.
+- *OpenRouter rejected the API key* — the `sk-or-…` key is wrong or belongs to another service; save
+  the right one in **Settings → Access keys**.
+- *OpenRouter has no model called …* — OpenRouter names models `provider/name`, and the saved one is
+  not in its catalogue; pick a name from the OpenRouter group or add it to `server/models.json`.
+- *OpenRouter has no credits left* — that gateway bills per request instead of giving a daily free
+  quota; choose a cheaper model there, or add credit to the OpenRouter account.
+- *No Gemini API key is saved* / *No Groq API key is saved* / *No OpenRouter API key is saved* — that
+  provider was skipped, not called. If you would rather not use one of them, remove its key in
+  Settings and the portal uses the others.
 
 **"This model is currently experiencing high demand" (503)**
 Temporary on the flash models. Each one is retried once, then the next model in the chain is asked,
-and the other provider is asked after that if its key is saved — so a single busy model no longer
-stops a listing. "All 4 Gemini models are busy" with no answer from the other provider means the whole
-chain was saturated and no key is configured for it; demand spikes usually pass within 15 minutes, and
-the free quota resets around 05:00.
+and the other providers are asked after that if their keys are saved — so a single busy model no
+longer stops a listing. "All 4 Gemini models are busy" with no answer from the other providers means
+the whole chain was saturated and no key is configured for them; demand spikes usually pass within 15
+minutes, and the free quota resets around 05:00.
 
 **"Claude did not return valid JSON"**
 The model wrapped its answer in prose. Just click **Rewrite text** — the server already strips
@@ -410,7 +424,7 @@ publishes it, so changes made here appear on the site without any manual step.
 | the listing-text job | `server/netlify/functions/run.mjs` — a background Function, so a 30–60 second model answer is never cut off |
 | products, settings, keyword cache | Netlify's managed Postgres (`DATABASE_URL` is provided automatically; the schema creates itself on first use) |
 | PDFs, uploaded images, ZIPs | Netlify Blobs store `listing-files`, under `products/<id>/…` |
-| API keys | **Settings → Access keys** in the deployed app, which stores them in your database, or site secrets for `GEMINI_API_KEY` / `GROQ_API_KEY` |
+| API keys | **Settings → Access keys** in the deployed app, which stores them in your database, or site secrets for `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` |
 
 What changes when it is hosted:
 

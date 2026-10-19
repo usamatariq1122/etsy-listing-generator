@@ -17,6 +17,14 @@
       "llama-3.1-8b-instant"
     ]
   },
+  "openrouter": {
+    "label": "OpenRouter",
+    "models": [
+      "openai/gpt-4o-mini",
+      "deepseek/deepseek-chat",
+      "meta-llama/llama-3.3-70b-instruct"
+    ]
+  },
   "anthropic": {
     "label": "Claude",
     "models": [

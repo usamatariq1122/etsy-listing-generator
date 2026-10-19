@@ -9,13 +9,13 @@ export const STATUS_LABELS = {
 
 export const statusLabel = (status) => STATUS_LABELS[status] || status;
 
-const PROVIDER_LABELS = { gemini: 'Gemini', anthropic: 'Claude', groq: 'Groq' };
+const PROVIDER_LABELS = { gemini: 'Gemini', anthropic: 'Claude', groq: 'Groq', openrouter: 'OpenRouter' };
 
 export const providerLabel = (provider) => PROVIDER_LABELS[provider] || provider;
 
 // A Gemini answer is identified by its model name alone; a fallback provider is
 // named first so the seller can see the answer did not come from Gemini.
-const FALLBACK_LABELS = { groq: 'Groq', anthropic: 'Claude' };
+const FALLBACK_LABELS = { groq: 'Groq', anthropic: 'Claude', openrouter: 'OpenRouter' };
 
 /** Who wrote the guide, e.g. "gemini-3.5-flash" or "Groq (llama-3.3-70b-versatile)". */
 export const modelLabel = (quality) => {

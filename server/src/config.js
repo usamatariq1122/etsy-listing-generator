@@ -30,6 +30,14 @@ export const config = {
     model: process.env.GROQ_MODEL || '',
   },
 
+  // Third text provider, reached through OpenRouter's OpenAI-compatible gateway.
+  // Any model name from openrouter.ai/models can be listed in server/models.json.
+  openrouter: {
+    url: 'https://openrouter.ai/api/v1/chat/completions',
+    apiKey: process.env.OPENROUTER_API_KEY || '',
+    model: process.env.OPENROUTER_MODEL || '',
+  },
+
   db: {
     host: process.env.DB_HOST || '127.0.0.1',
     port: num(process.env.DB_PORT, 3306),

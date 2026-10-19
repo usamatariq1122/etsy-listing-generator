@@ -216,15 +216,15 @@ export default function SettingsView({ settings, busy, onSave, onRemove, onSaveM
             </select>
           </label>
           <p className="muted small">
-            {selected.provider === 'groq'
-              ? `Groq is asked first with ${selected.model}; if it declines, the Gemini models are tried from best to lite.`
-              : 'Gemini is asked first and walks its own models from best to lite when one is busy. Groq answers last, with the first model of its group.'}
+            {selected.provider === 'gemini'
+              ? 'Gemini is asked first and walks its own models from best to lite when one is busy. Groq and OpenRouter answer after it, each with the first model of its group.'
+              : `${labelFor(selected.provider)} is asked first with ${selected.model}; if it declines, the other providers are tried in turn, with Gemini walking its models from best to lite.`}
             {' '}Daily limits are counted per model, and the notice bar always says who wrote the text.
           </p>
         </div>
 
         <p className="muted small">
-          Both groups come from <code>server/models.json</code>: add a model name there and it appears
+          Every group comes from <code>server/models.json</code>: add a model name there and it appears
           here on the next page load, with no code change and no restart.
         </p>
       </section>
@@ -251,7 +251,7 @@ export default function SettingsView({ settings, busy, onSave, onRemove, onSaveM
         <h2>Portal password</h2>
         <p className="muted small">
           {configured
-            ? 'Every page and every download needs this password, so nobody else can run up your Gemini and Groq limits on your keys. Only a salted hash is stored. Changing it signs out any other browser.'
+            ? 'Every page and every download needs this password, so nobody else can run up your model limits on your keys. Only a salted hash is stored. Changing it signs out any other browser.'
             : 'No password yet, so this portal is open to anyone who reaches its address. Once you host it, the first screen you see asks for one - every page and every download then needs it, and only a salted hash is stored.'}
         </p>
         {onChangePassword ? (
