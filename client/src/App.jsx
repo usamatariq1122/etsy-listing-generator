@@ -18,13 +18,14 @@ const QUOTA_PROBLEM = /quota|429|rate limit|no free requests/i;
 
 /** What to click next, given who wrote the guide. */
 function rewriteHint(quality) {
-  if (quality.provider && quality.provider !== 'gemini') return ', or pick a Gemini model under Advanced Settings so Gemini writes the guide';
-  if (/lite/i.test(quality.model || '')) return ', or choose a full-size model under Advanced Settings';
+  if (quality.provider && quality.provider !== 'gemini') return ', or pick a Gemini model under Settings so Gemini writes the guide';
+  if (/lite/i.test(quality.model || '')) return ', or choose a full-size model under Settings';
   return '';
 }
 
 export default function App() {
   const [view, setView] = useState('studio');
+  const [navOpen, setNavOpen] = useState(false);
   const [product, setProduct] = useState(null);
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
@@ -39,9 +40,13 @@ export default function App() {
   const [picked, setPicked] = useState([]);
   const [slots, setSlots] = useState([]);
   const [staged, setStaged] = useState([]);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [etsy, setEtsy] = useState(null);
   const [legal, setLegal] = useState(null);
+
+  // Advanced Settings is now its own sidebar view rather than a fold under the
+  // studio. These keep the old open/toggle names the banners and loaders use.
+  const advancedOpen = view === 'settings';
+  const setAdvancedOpen = (open) => setView(open ? 'settings' : 'studio');
 
   const loadHealth = useCallback(() => {
     api.health().then(setHealth).catch(() => setHealth(null));
@@ -452,7 +457,7 @@ export default function App() {
       setError(
         new Error(
           `Your listing is generated, but your Etsy shop defaults are incomplete (missing: ${missing.join(', ')}). `
-            + 'Set them under Advanced Settings → Etsy shop defaults, or fill the Etsy panel below, then create the draft.',
+            + 'Set them under Settings → Etsy shop defaults, or use the Etsy panel under the listing, then create the draft.',
         ),
       );
       return;
@@ -670,6 +675,7 @@ export default function App() {
     studio: ['Generator', 'Listing text, image prompts and a ready-to-upload ZIP of PDFs.'],
     history: ['History', 'Your saved listings — open one to edit, reprint or delete.'],
     bulk: ['Bulk', 'One listing per CSV row, run through the same generator.'],
+    settings: ['Settings', 'Keywords, model, access keys, brand colours and Etsy defaults.'],
     admin: ['Admin', 'Users, usage and failed jobs across the portal.'],
   };
   const [title, subtitle] = TITLES[view] || TITLES.studio;
@@ -683,6 +689,7 @@ export default function App() {
     studio: <path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6zM18 15l.7 2.1L21 18l-2.3.9L18 21l-.7-2.1L15 18l2.3-.9z" />,
     history: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></>,
     bulk: <><path d="M12 3l8 4-8 4-8-4 8-4z" /><path d="M4 12l8 4 8-4" /><path d="M4 16l8 4 8-4" /></>,
+    settings: <><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1.3l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2.2-1.3L14 2h-4l-.4 2.4A7 7 0 0 0 7.5 5.7l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .9.1 1.3l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2.2 1.3L10 22h4l.4-2.4a7 7 0 0 0 2.1-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3z" /></>,
     admin: <path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z" />,
   };
   const NavIcon = ({ name }) => (
@@ -691,7 +698,11 @@ export default function App() {
     </svg>
   );
   const sideItem = (id, label) => (
-    <button className={view === id ? 'side-item active' : 'side-item'} onClick={() => setView(id)} disabled={Boolean(busy)}>
+    <button
+      className={view === id ? 'side-item active' : 'side-item'}
+      onClick={() => { setView(id); setNavOpen(false); }}
+      disabled={Boolean(busy)}
+    >
       <NavIcon name={id} />
       <span>{label}</span>
     </button>
@@ -699,15 +710,22 @@ export default function App() {
 
   return (
     <div className="shell">
-      <aside className="sidebar">
+      {navOpen && <div className="nav-scrim" onClick={() => setNavOpen(false)} />}
+      <aside className={navOpen ? 'sidebar open' : 'sidebar'}>
         <div className="brand">
           <span className="brand-mark"><img src="/brand/listora-icon.svg" alt="Listora logo" /></span>
           <span className="brand-name">Listora</span>
+          <button className="nav-close" onClick={() => setNavOpen(false)} aria-label="Close menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
         </div>
         <nav className="side-nav">
           {sideItem('studio', 'Generator')}
           {sideItem('history', 'History')}
           {sideItem('bulk', 'Bulk')}
+          {sideItem('settings', 'Settings')}
           {session.account?.role === 'admin' && sideItem('admin', 'Admin')}
         </nav>
         <div className="side-foot">
@@ -722,6 +740,11 @@ export default function App() {
 
       <div className="main-col">
         <header className="appbar">
+          <button className="nav-toggle" onClick={() => setNavOpen(true)} aria-label="Open menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
           <div className="appbar-title">
             <h1>{title}</h1>
             <p className="subtitle">{subtitle}</p>
@@ -747,8 +770,8 @@ export default function App() {
         <main className="content">
           {health && health.missingProviders?.length > 0 && !advancedOpen && (
         <div className="banner warn">
-          <strong>No API key for {health.missingProviders.map(providerLabel).join(' or ')}.</strong> Open Advanced
-          Settings and paste a key under Access keys to start generating again.
+          <strong>No API key for {health.missingProviders.map(providerLabel).join(' or ')}.</strong> Open Settings
+          and paste a key under Access keys to start generating again.
         </div>
       )}
 
@@ -818,6 +841,28 @@ export default function App() {
           />
         ) : view === 'bulk' ? (
           <BulkView onNotice={setNotice} onOpenProduct={openFromHistory} />
+        ) : view === 'settings' ? (
+          <AdvancedPanel
+            productName={productName}
+            busy={busy}
+            picked={picked}
+            onPicked={setPicked}
+            settings={settings}
+            prompts={prompts}
+            canManagePrompts={!session.account || session.account.role === 'admin'}
+            etsy={etsy}
+            canManageEtsy={!session.account || session.account.role === 'admin'}
+            onSaveKey={handleSaveKey}
+            onRemoveKey={handleRemoveKey}
+            onSaveModel={handleSaveModel}
+            onSaveBrand={handleSaveBrand}
+            onSaveTheme={handleSaveTheme}
+            onRemoveTheme={handleRemoveTheme}
+            onSavePrompt={handleSavePrompt}
+            onRemovePrompt={handleRemovePrompt}
+            onSaveEtsyDefaults={handleSaveEtsyDefaults}
+            onChangePassword={handleChangePassword}
+          />
         ) : view === 'admin' ? (
           <AdminView />
         ) : (
@@ -877,30 +922,6 @@ export default function App() {
                 onError={catch401}
               />
             )}
-
-            <AdvancedPanel
-              open={advancedOpen}
-              onToggle={setAdvancedOpen}
-              productName={productName}
-              busy={busy}
-              picked={picked}
-              onPicked={setPicked}
-              settings={settings}
-              prompts={prompts}
-              canManagePrompts={!session.account || session.account.role === 'admin'}
-              etsy={etsy}
-              canManageEtsy={!session.account || session.account.role === 'admin'}
-              onSaveKey={handleSaveKey}
-              onRemoveKey={handleRemoveKey}
-              onSaveModel={handleSaveModel}
-              onSaveBrand={handleSaveBrand}
-              onSaveTheme={handleSaveTheme}
-              onRemoveTheme={handleRemoveTheme}
-              onSavePrompt={handleSavePrompt}
-              onRemovePrompt={handleRemovePrompt}
-              onSaveEtsyDefaults={handleSaveEtsyDefaults}
-              onChangePassword={handleChangePassword}
-            />
           </div>
         )}
 

@@ -99,6 +99,25 @@ body::before {
 .usage-bar { height: 6px; border-radius: 999px; background: var(--glass-strong); overflow: hidden; }
 .usage-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #0a9f6d); }
 
+/* Mobile drawer controls: the rail is always in flow on desktop, so the
+   hamburger, the in-drawer close button and the scrim stay hidden until the
+   layout collapses to a single column. */
+.nav-toggle, .nav-close, .nav-scrim { display: none; }
+.nav-toggle {
+  flex: 0 0 auto; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--glass); color: var(--ink); cursor: pointer; place-items: center;
+}
+.nav-toggle svg, .nav-close svg { width: 22px; height: 22px; }
+.nav-close {
+  margin-left: auto; width: 36px; height: 36px; border: 0; background: none; color: var(--muted);
+  cursor: pointer; place-items: center; border-radius: var(--radius-sm);
+}
+.nav-close:hover { color: var(--ink); background: var(--glass); }
+.nav-scrim {
+  position: fixed; inset: 0; z-index: 30; background: rgba(4, 8, 10, 0.55);
+  backdrop-filter: blur(2px);
+}
+
 .main-col { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .appbar {
   position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between;
@@ -116,21 +135,27 @@ body::before {
 }
 .content { width: 100%; max-width: 1120px; margin: 0 auto; padding: 26px 28px 72px; }
 
-/* Narrow screens: the rail becomes a horizontal strip across the top. */
+/* Narrow screens: the rail becomes an off-canvas drawer behind a hamburger. */
 @media (max-width: 900px) {
   .shell { flex-direction: column; }
   .sidebar {
-    position: static; width: 100%; flex: none; height: auto; flex-direction: row; align-items: center;
-    gap: 10px; padding: 12px 14px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto;
+    position: fixed; top: 0; left: 0; z-index: 40; width: 264px; max-width: 84vw; height: 100vh;
+    flex-direction: column; align-items: stretch; gap: 6px; padding: 22px 14px; overflow-y: auto;
+    border-right: 1px solid var(--line); border-bottom: 0;
+    transform: translateX(-100%); transition: transform 0.24s ease;
   }
-  .brand { padding: 0 8px 0 0; }
-  .side-nav { flex-direction: row; }
-  .side-item { width: auto; padding: 9px 12px; }
-  .side-item span { display: none; }
-  .side-foot { margin: 0 0 0 auto; padding: 0; border-top: 0; }
-  .usage { flex-direction: row; align-items: center; gap: 8px; }
-  .usage-bar { display: none; }
+  .sidebar.open { transform: translateX(0); box-shadow: 0 0 60px -12px rgba(0, 0, 0, 0.6); }
+  .brand { padding: 2px 4px 18px; }
+  .nav-close { display: grid; }
+  .nav-scrim { display: block; }
+  .side-nav { flex-direction: column; }
+  .side-item { width: 100%; padding: 11px 14px; }
+  .side-item span { display: inline; }
+  .side-foot { margin: auto 0 0; padding: 14px 8px 4px; border-top: 1px solid var(--line); }
+  .usage { flex-direction: column; align-items: stretch; gap: 6px; }
+  .usage-bar { display: block; }
   .appbar { padding: 14px 16px; }
+  .nav-toggle { display: grid; }
   .content { padding: 18px 14px 56px; }
 }
 
@@ -416,6 +441,25 @@ table.manifest td:last-child { white-space: nowrap; }
   padding: 0; margin: 16px 0 0;
 }
 .advanced .card + .card { border-top: 1px solid var(--line); padding-top: 18px; }
+
+/* The same panel, now a full Settings screen reached from the sidebar rather than
+   a fold under the studio. It owns its card via .card, so only the inner spacing
+   and the stacked settings sections need the rules the old .advanced gave them. */
+.advanced-open > *:not(.advanced-head) { margin-left: 0; margin-right: 0; }
+.advanced-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line);
+}
+.advanced-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.advanced-open h3 { margin: 22px 0 8px; font-size: 14.5px; font-weight: 700; }
+.advanced-open h3:first-of-type { margin-top: 0; }
+.advanced-open > .field { margin-bottom: 22px; }
+/* The settings sections live inside the screen, so they drop their own card chrome. */
+.advanced-open .card {
+  background: none; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none;
+  padding: 0; margin: 16px 0 0;
+}
+.advanced-open .card + .card { border-top: 1px solid var(--line); padding-top: 18px; }
 
 /* Legal pages shown in place of the sign-in card, with the links under it. */
 .legal-links { justify-content: center; }

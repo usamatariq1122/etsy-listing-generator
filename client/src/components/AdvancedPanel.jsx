@@ -2,11 +2,10 @@ import KeywordPicker from './KeywordPicker.jsx';
 import SettingsView from './SettingsView.jsx';
 import { providerLabel } from '../labels.js';
 
-// Everything a first run does not need, folded away until asked for: the SEO
-// keyword tick list, the model, the saved keys, the brand and the password.
+// Everything a first run does not need, now on its own Settings screen reached
+// from the sidebar: the SEO keyword tick list, the model, the saved keys, the
+// brand, the Etsy shop defaults and the password.
 export default function AdvancedPanel({
-  open,
-  onToggle,
   productName,
   busy,
   picked,
@@ -34,11 +33,11 @@ export default function AdvancedPanel({
   ].join(' · ');
 
   return (
-    <details className="drop advanced" open={open} onToggle={(event) => onToggle(event.target.open)}>
-      <summary>
-        <span>Advanced Settings</span>
+    <section className="card advanced-open">
+      <div className="advanced-head">
+        <h2>Advanced Settings</h2>
         <em className="drop-meta">{meta}</em>
-      </summary>
+      </div>
 
       <h3>SEO keywords</h3>
       <p className="muted small">
@@ -70,6 +69,6 @@ export default function AdvancedPanel({
       ) : (
         <p className="muted small">Loading settings…</p>
       )}
-    </details>
+    </section>
   );
 }

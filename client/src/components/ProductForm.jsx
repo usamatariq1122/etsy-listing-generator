@@ -45,7 +45,7 @@ export default function ProductForm({ busy, productName, onProductName, productT
         </label>
         <p className="muted small">
           Auto-detect lets the model infer the type from the name. Pick a specific type to write from the brief
-          you have set for it under Advanced Settings.
+          you have set for it under Settings.
         </p>
 
         {localError && <p className="inline-error">{localError}</p>}
@@ -76,7 +76,7 @@ export default function ProductForm({ busy, productName, onProductName, productT
 
       <p className="muted small">
         The two PDF files and the 7 image prompts are written for you, then packed with your photos into one
-        ZIP. Keywords, model and API keys sit under Advanced Settings below, and nothing there is required.
+        ZIP. Keywords, model and API keys sit under Settings, and nothing there is required.
       </p>
     </section>
   );

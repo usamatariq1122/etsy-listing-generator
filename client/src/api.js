@@ -228,5 +228,5 @@ export async function waitForText(id, { everyMs = 1500, timeoutMs = 5 * 60 * 100
       throw err;
     }
   }
-  throw new Error('The text model took too long and stopped answering. Try again, or pick another model under Advanced Settings.');
+  throw new Error('The text model took too long and stopped answering. Try again, or pick another model under Settings.');
 }
