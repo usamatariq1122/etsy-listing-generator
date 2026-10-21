@@ -2,18 +2,18 @@ import { useState } from 'react';
 
 const AUTO = [{ value: 'general', label: 'Auto-detect' }];
 
-export default function ProductForm({ busy, productName, onProductName, productTypes, productType, onProductType, onCreate }) {
+export default function ProductForm({ busy, productName, onProductName, productTypes, productType, onProductType, onCreate, etsyConnected, onCreateToDraft }) {
   const [localError, setLocalError] = useState('');
   const types = productTypes?.length ? productTypes : AUTO;
 
-  function submit(event) {
+  function submit(event, action) {
     event.preventDefault();
     if (productName.trim().length < 3) {
       setLocalError('Enter a product name or niche, for example "Crochet dragon pattern".');
       return;
     }
     setLocalError('');
-    onCreate();
+    (action || onCreate)();
   }
 
   return (
@@ -53,7 +53,26 @@ export default function ProductForm({ busy, productName, onProductName, productT
         <button type="submit" className="primary" disabled={Boolean(busy)}>
           {busy ? 'Working…' : 'Generate Listing Package'}
         </button>
+
+        {etsyConnected && (
+          <button
+            type="button"
+            className="primary"
+            disabled={Boolean(busy)}
+            onClick={(event) => submit(event, onCreateToDraft)}
+          >
+            {busy ? 'Working…' : 'Generate → Etsy draft'}
+          </button>
+        )}
       </form>
+
+      {etsyConnected && (
+        <p className="muted small">
+          “Generate → Etsy draft” writes the listing, then sends it to Etsy as a private draft using your saved shop
+          defaults. Set a price and add at least one image on the listing first, or Etsy will refuse the draft. It
+          never goes live until you press Publish.
+        </p>
+      )}
 
       <p className="muted small">
         The two PDF files and the 7 image prompts are written for you, then packed with your photos into one

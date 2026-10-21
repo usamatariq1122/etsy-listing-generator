@@ -52,6 +52,7 @@ import { authorizeUrl, completeConnect, connection, disconnect, etsyReady } from
 import { categoryTree, resolveCategoryId } from './taxonomy.js';
 import { reportError, sentryEnabled } from './sentry.js';
 import { WHEN_MADE, WHO_MADE, publishDraft, sendDraft } from './draft.js';
+import { clearEtsyDefaults, etsyDefaultIssues, etsyDefaults, saveEtsyDefaults } from './etsyDefaults.js';
 import {
   clearFailures,
   createSession,
@@ -717,6 +718,24 @@ const routes = [
       return json({ removed: false, types: await listTemplates() });
     } },
 
+  // Etsy's standing answers, editable only while Etsy is switched on and only by
+  // the owner (or a solo run). They are not secret, but they drive every draft,
+  // so a shared account cannot change what another seller's listings are sent as.
+  { method: 'PUT', pattern: '/settings/etsy-defaults', handler: async (ctx) => {
+      requireEtsy();
+      requirePromptAdmin(ctx);
+      const issues = etsyDefaultIssues(ctx.body);
+      if (issues.length) throw new HttpError(issues.join(' '), 400, { issues });
+      return json({ saved: true, defaults: await saveEtsyDefaults(ctx.body) });
+    } },
+
+  { method: 'DELETE', pattern: '/settings/etsy-defaults', handler: async (ctx) => {
+      requireEtsy();
+      requirePromptAdmin(ctx);
+      await clearEtsyDefaults();
+      return json({ removed: true, defaults: await etsyDefaults() });
+    } },
+
   // The owner's read-only dashboard: who has an account, how much of today's
   // quota each has spent, and which listings failed. Only an admin account sees
   // it — a solo local run has no accounts to manage, so it is refused there too.
@@ -735,7 +754,7 @@ const routes = [
   // shows nothing Etsy-shaped and the ZIP download path is never touched.
   // Tokens stay in the database, encrypted: no route here returns one.
   { method: 'GET', pattern: '/etsy/status', handler: async () =>
-      json({ ...(await connection()), whoMade: WHO_MADE, whenMade: WHEN_MADE }) },
+      json({ ...(await connection()), whoMade: WHO_MADE, whenMade: WHEN_MADE, defaults: await etsyDefaults() }) },
 
   { method: 'POST', pattern: '/etsy/connect', handler: async () => {
       requireEtsy();
@@ -796,9 +815,19 @@ const routes = [
       if (!(await claimEtsyDraft(product.id))) {
         throw new HttpError('This package is already being sent to Etsy, or is already a draft there.', 409);
       }
-      const taxonomyId = await resolveCategoryId(ctx.body?.category);
+      // The seller's standing answers fill any question this request left blank,
+      // so a saved default means one click is enough. A value sent here always
+      // wins, so the Etsy panel can still override per listing. Resolving the
+      // category happens inside the guard below: if it is blank or mistyped the
+      // claim is released, so the listing is not stranded as "already sending".
+      const saved = await etsyDefaults();
+      const filled = { ...saved };
+      for (const [key, value] of Object.entries(ctx.body ?? {})) {
+        if (String(value ?? '').trim()) filled[key] = value;
+      }
       try {
-        const draft = await sendDraft(product, ctx.body, taxonomyId);
+        const taxonomyId = await resolveCategoryId(filled.category);
+        const draft = await sendDraft(product, filled, taxonomyId);
         return json({ draft, product: await publicView(await getProduct(product.id)) });
       } catch (error) {
         // Failed before a real listing id was stored: clear the claim so the

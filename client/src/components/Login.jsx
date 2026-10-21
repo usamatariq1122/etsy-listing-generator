@@ -107,7 +107,10 @@ export default function Login({ status, onSignedIn }) {
     <div className="app">
       <header className="topbar">
         <div>
-          <h1>Listora</h1>
+          <div className="login-brand">
+            <span className="brand-mark"><img src="/brand/listora-icon.svg" alt="Listora logo" /></span>
+            <h1>Listora</h1>
+          </div>
           <p className="subtitle">Listing text, image prompts and a ready-to-upload ZIP of PDFs.</p>
         </div>
       </header>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 120" width="300" height="120" role="img" aria-label="Listora">
+  <defs>
+    <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14D392"/>
+      <stop offset="1" stop-color="#0A9166"/>
+    </linearGradient>
+  </defs>
+  <rect width="300" height="120" rx="20" fill="#0F1A1A"/>
+  <g transform="translate(16 14) scale(0.766)">
+    <rect x="6" y="6" width="108" height="108" rx="28" fill="url(#lg)"/>
+    <g fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M36 34 V80 H70"/>
+      <path d="M62 76 L70 84 L90 56"/>
+    </g>
+  </g>
+  <text x="122" y="61" font-family="Inter, Poppins, 'Segoe UI', system-ui, sans-serif" font-size="42" font-weight="700" letter-spacing="-0.5" dominant-baseline="middle">
+    <tspan fill="#ffffff">List</tspan><tspan fill="#34D399">ora</tspan>
+  </text>
+</svg>

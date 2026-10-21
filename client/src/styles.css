@@ -60,6 +60,80 @@ body::before {
 
 .app { max-width: 1180px; margin: 0 auto; padding: 32px 20px 72px; }
 
+/* ---- Dashboard shell (Yaballe-style rail + app bar) ---------------------
+   Frame only: the sidebar and top bar wrap the existing views. Colours,
+   cards and every control inside are unchanged — this adds no behaviour. */
+.shell { display: flex; min-height: 100vh; }
+
+.sidebar {
+  position: sticky; top: 0; align-self: flex-start; flex: 0 0 200px; width: 200px;
+  height: 100vh; display: flex; flex-direction: column; gap: 6px;
+  padding: 22px 14px; border-right: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  backdrop-filter: blur(16px) saturate(150%);
+}
+.brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 18px; }
+.brand-mark {
+  width: 36px; height: 36px; flex: 0 0 36px; display: grid; place-items: center;
+  filter: drop-shadow(0 8px 16px -8px var(--accent-glow));
+}
+.brand-mark img { width: 100%; height: 100%; display: block; }
+.login-brand { display: flex; align-items: center; gap: 12px; }
+.brand-name {
+  font-size: 20px; font-weight: 800; letter-spacing: -0.02em;
+  background: linear-gradient(96deg, #fff 10%, var(--accent) 130%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.side-nav { display: flex; flex-direction: column; gap: 4px; }
+.side-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 14px;
+  border: 1px solid transparent; border-radius: var(--radius-sm); background: none;
+  color: var(--muted); font-size: 14.5px; font-weight: 600; cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.side-item svg { width: 19px; height: 19px; flex: 0 0 19px; }
+.side-item:hover { color: var(--ink); background: var(--glass); }
+.side-item.active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-glow); }
+.side-foot { margin-top: auto; padding: 14px 8px 4px; border-top: 1px solid var(--line); }
+.usage { display: flex; flex-direction: column; gap: 6px; }
+.usage-bar { height: 6px; border-radius: 999px; background: var(--glass-strong); overflow: hidden; }
+.usage-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #0a9f6d); }
+
+.main-col { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.appbar {
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--line);
+  background: rgba(11, 16, 20, 0.72); backdrop-filter: blur(14px) saturate(140%);
+}
+.appbar-title h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.appbar-title .subtitle { margin: 2px 0 0; }
+.appbar-right { display: flex; align-items: center; gap: 14px; }
+.who { display: inline-flex; align-items: center; gap: 9px; color: var(--muted); font-size: 13.5px; max-width: 240px; }
+.who-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avatar {
+  width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; display: grid; place-items: center;
+  font-weight: 700; font-size: 13px; color: var(--ink); background: var(--glass-strong); border: 1px solid var(--line);
+}
+.content { width: 100%; max-width: 1120px; margin: 0 auto; padding: 26px 28px 72px; }
+
+/* Narrow screens: the rail becomes a horizontal strip across the top. */
+@media (max-width: 900px) {
+  .shell { flex-direction: column; }
+  .sidebar {
+    position: static; width: 100%; flex: none; height: auto; flex-direction: row; align-items: center;
+    gap: 10px; padding: 12px 14px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto;
+  }
+  .brand { padding: 0 8px 0 0; }
+  .side-nav { flex-direction: row; }
+  .side-item { width: auto; padding: 9px 12px; }
+  .side-item span { display: none; }
+  .side-foot { margin: 0 0 0 auto; padding: 0; border-top: 0; }
+  .usage { flex-direction: row; align-items: center; gap: 8px; }
+  .usage-bar { display: none; }
+  .appbar { padding: 14px 16px; }
+  .content { padding: 18px 14px 56px; }
+}
+
 .topbar {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 16px; flex-wrap: wrap; margin-bottom: 24px;
@@ -326,9 +400,15 @@ table.manifest td:last-child { white-space: nowrap; }
   .staged-state { grid-column: 1 / -1; }
 }
 
-.advanced { background: var(--card); margin-bottom: 16px; }
-.advanced > summary { font-size: 15px; }
-.advanced h3 { margin: 22px 0 0; font-size: 14.5px; font-weight: 700; }
+.advanced { background: var(--card); margin-bottom: 16px; padding: 0 20px 20px; }
+.advanced > summary { font-size: 15px; padding: 14px 20px; margin: 0 -20px 12px; }
+.advanced[open] > summary { border-bottom: 1px solid var(--line); }
+/* The panel now owns its own padding, so its children line up flush to it rather
+   than taking the generic .drop 14px — that mismatch is what left the headings at
+   the card edge while the paragraphs floated in. */
+.advanced > *:not(summary) { margin-left: 0; margin-right: 0; }
+.advanced h3 { margin: 20px 0 8px; font-size: 14.5px; font-weight: 700; }
+.advanced h3:first-of-type { margin-top: 0; }
 .advanced > .field { margin-bottom: 22px; }
 /* The settings sections live inside the panel, so they drop their own card chrome. */
 .advanced .card {

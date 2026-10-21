@@ -14,6 +14,8 @@ export default function AdvancedPanel({
   settings,
   prompts,
   canManagePrompts,
+  etsy,
+  canManageEtsy,
   onSaveKey,
   onRemoveKey,
   onSaveModel,
@@ -22,6 +24,7 @@ export default function AdvancedPanel({
   onRemoveTheme,
   onSavePrompt,
   onRemovePrompt,
+  onSaveEtsyDefaults,
   onChangePassword,
 }) {
   const selected = settings?.selected || {};
@@ -51,6 +54,8 @@ export default function AdvancedPanel({
           busy={busy}
           prompts={prompts}
           canManagePrompts={canManagePrompts}
+          etsy={etsy}
+          canManageEtsy={canManageEtsy}
           onSave={onSaveKey}
           onRemove={onRemoveKey}
           onSaveModel={onSaveModel}
@@ -59,6 +64,7 @@ export default function AdvancedPanel({
           onRemoveTheme={onRemoveTheme}
           onSavePrompt={onSavePrompt}
           onRemovePrompt={onRemovePrompt}
+          onSaveEtsyDefaults={onSaveEtsyDefaults}
           onChangePassword={onChangePassword}
         />
       ) : (

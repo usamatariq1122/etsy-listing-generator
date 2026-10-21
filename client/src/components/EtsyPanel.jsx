@@ -6,14 +6,14 @@ import { api } from '../api.js';
 // only goes live when the seller presses Publish and confirms. Nothing is deleted
 // from here.
 
-const WHO_LABELS = {
+export const WHO_LABELS = {
   i_did: 'I made them',
   someone_else: 'Someone else made them',
   collective: 'A collective I belong to',
 };
 
 /** "2020_2026" reads as "2020-2026", "before_2007" as "Before 2007". */
-function whenLabel(value) {
+export function whenLabel(value) {
   if (value === 'made_to_order') return 'Made to order';
   const [first, second] = value.split('_');
   if (second) return `${first}-${second}`;
@@ -23,10 +23,11 @@ function whenLabel(value) {
 
 export default function EtsyPanel({ product, status, busy, onConnect, onDraft, onPublish, onDisconnect, onError }) {
   const [categories, setCategories] = useState(null);
-  const [category, setCategory] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [whoMade, setWhoMade] = useState('');
-  const [whenMade, setWhenMade] = useState('');
+  const seed = status?.defaults || {};
+  const [category, setCategory] = useState(seed.category || '');
+  const [quantity, setQuantity] = useState(seed.quantity || '');
+  const [whoMade, setWhoMade] = useState(seed.whoMade || '');
+  const [whenMade, setWhenMade] = useState(seed.whenMade || '');
   const [published, setPublished] = useState(false);
   const [saving, setSaving] = useState(false);
 

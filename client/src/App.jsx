@@ -411,18 +411,53 @@ export default function App() {
   }
 
   async function handleEtsyDraft(fields) {
+    return sendDraftFor(product.id, fields);
+  }
+
+  /**
+   * Sends one package to Etsy as a draft and reports the outcome. Passing an id
+   * rather than reading `product` from state lets the one-click flow use the
+   * listing it just generated, before a re-render has landed it in state.
+   */
+  async function sendDraftFor(productId, fields) {
     const data = await run(
       'Saving your draft in Etsy',
       'Creating the listing, then attaching your images and both PDFs. It is saved as a draft, not published.',
-      () => api.etsyDraft(product.id, fields),
+      () => api.etsyDraft(productId, fields),
     );
-    if (!data) return;
+    if (!data) return false;
     setProduct(data.product);
     const { draft } = data;
     setNotice(
       `Draft saved in Etsy: ${draft.images} image${draft.images === 1 ? '' : 's'} and ${draft.files} file${draft.files === 1 ? '' : 's'} attached. `
         + `${draft.url ?? `listing ${draft.listingId}`} — review it there, or use Publish to make it live.`,
     );
+    return true;
+  }
+
+  // One click from a bare niche: generate the text, then send the draft using the
+  // saved shop defaults. Price and an image are per-listing, so a clear nudge is
+  // shown if a default is still missing rather than firing a request that must fail.
+  async function handleCreateToDraft() {
+    const missing = ['category', 'quantity', 'whoMade', 'whenMade'].filter(
+      (key) => !String(etsy?.defaults?.[key] ?? '').trim(),
+    );
+    const created = await generateText(
+      'Generating your listing package',
+      'The text model is writing File 1, File 2 and 7 image prompts. This takes about 30-60 seconds.',
+      () => api.create(productName.trim(), picked, productType === 'general' ? null : productType),
+    );
+    if (!created) return;
+    if (missing.length) {
+      setError(
+        new Error(
+          `Your listing is generated, but your Etsy shop defaults are incomplete (missing: ${missing.join(', ')}). `
+            + 'Set them under Advanced Settings → Etsy shop defaults, or fill the Etsy panel below, then create the draft.',
+        ),
+      );
+      return;
+    }
+    await sendDraftFor(created.id, {});
   }
 
   // Publishing makes a real listing visible on the shop and available to buyers,
@@ -567,6 +602,14 @@ export default function App() {
     }
   }
 
+  async function handleSaveEtsyDefaults(defaults) {
+    const data = await run('Saving Etsy defaults', null, () => api.saveEtsyDefaults(defaults));
+    if (data) {
+      setEtsy((prev) => ({ ...prev, defaults: data.defaults }));
+      setNotice('Etsy shop defaults saved. New drafts are sent with them.');
+    }
+  }
+
   async function handleRemoveTheme() {
     const data = await run('Resetting colours', null, () => api.removeTheme());
     if (data) {
@@ -621,48 +664,88 @@ export default function App() {
   // The short-guide warning travels with the product, so it survives a reload.
   const quality = view === 'studio' && product ? product.warnings?.quality : null;
 
-  return (
-    <div className="app">
-      <header className="topbar">
-        <div>
-          <h1>Listora</h1>
-          <p className="subtitle">Listing text, image prompts and a ready-to-upload ZIP of PDFs.</p>
-        </div>
-        <nav>
-          <button className={view === 'studio' ? 'nav active' : 'nav'} onClick={() => setView('studio')}>
-            Generator
-          </button>
-          <button className={view === 'history' ? 'nav active' : 'nav'} onClick={() => setView('history')}>
-            History
-          </button>
-          <button className={view === 'bulk' ? 'nav active' : 'nav'} onClick={() => setView('bulk')}>
-            Bulk
-          </button>
-          {session.account?.role === 'admin' && (
-            <button className={view === 'admin' ? 'nav active' : 'nav'} onClick={() => setView('admin')}>
-              Admin
-            </button>
-          )}
-          {session.account && (
-            <span className="nav who" title={session.account.email}>
-              {session.account.name || session.account.email}
-              {session.account.role === 'admin' ? ' (owner)' : ''}
-            </span>
-          )}
-          {session.usage && !session.usage.exempt && (
-            <span className="nav who" title={`Resets at midnight UTC`}>
-              {session.usage.remaining} of {session.usage.limit} left today
-            </span>
-          )}
-          {(session.protected || session.account) && (
-            <button className="nav" onClick={signOut} disabled={Boolean(busy)}>
-              Sign out
-            </button>
-          )}
-        </nav>
-      </header>
+  // Layout-only chrome: the frame around the existing views. Titles, the account
+  // chip and the usage meter read the same state the old top bar did.
+  const TITLES = {
+    studio: ['Generator', 'Listing text, image prompts and a ready-to-upload ZIP of PDFs.'],
+    history: ['History', 'Your saved listings — open one to edit, reprint or delete.'],
+    bulk: ['Bulk', 'One listing per CSV row, run through the same generator.'],
+    admin: ['Admin', 'Users, usage and failed jobs across the portal.'],
+  };
+  const [title, subtitle] = TITLES[view] || TITLES.studio;
+  const whoName = session.account?.name || session.account?.email || '';
+  const initial = whoName.slice(0, 1).toUpperCase();
+  const usage = session.usage && !session.usage.exempt && session.usage.limit
+    ? { ...session.usage, pct: Math.max(0, Math.min(100, (session.usage.remaining / session.usage.limit) * 100)) }
+    : null;
 
-      {health && health.missingProviders?.length > 0 && !advancedOpen && (
+  const icon = {
+    studio: <path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6zM18 15l.7 2.1L21 18l-2.3.9L18 21l-.7-2.1L15 18l2.3-.9z" />,
+    history: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></>,
+    bulk: <><path d="M12 3l8 4-8 4-8-4 8-4z" /><path d="M4 12l8 4 8-4" /><path d="M4 16l8 4 8-4" /></>,
+    admin: <path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z" />,
+  };
+  const NavIcon = ({ name }) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {icon[name]}
+    </svg>
+  );
+  const sideItem = (id, label) => (
+    <button className={view === id ? 'side-item active' : 'side-item'} onClick={() => setView(id)} disabled={Boolean(busy)}>
+      <NavIcon name={id} />
+      <span>{label}</span>
+    </button>
+  );
+
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <span className="brand-mark"><img src="/brand/listora-icon.svg" alt="Listora logo" /></span>
+          <span className="brand-name">Listora</span>
+        </div>
+        <nav className="side-nav">
+          {sideItem('studio', 'Generator')}
+          {sideItem('history', 'History')}
+          {sideItem('bulk', 'Bulk')}
+          {session.account?.role === 'admin' && sideItem('admin', 'Admin')}
+        </nav>
+        <div className="side-foot">
+          {usage && (
+            <div className="usage" title="Resets at midnight UTC">
+              <div className="usage-bar"><i style={{ width: `${usage.pct}%` }} /></div>
+              <span className="muted small">{usage.remaining} of {usage.limit} left today</span>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      <div className="main-col">
+        <header className="appbar">
+          <div className="appbar-title">
+            <h1>{title}</h1>
+            <p className="subtitle">{subtitle}</p>
+          </div>
+          <div className="appbar-right">
+            {session.account && (
+              <span className="who" title={session.account.email}>
+                <span className="avatar">{initial}</span>
+                <span className="who-text">
+                  {whoName}
+                  {session.account.role === 'admin' ? ' (owner)' : ''}
+                </span>
+              </span>
+            )}
+            {(session.protected || session.account) && (
+              <button className="nav" onClick={signOut} disabled={Boolean(busy)}>
+                Sign out
+              </button>
+            )}
+          </div>
+        </header>
+
+        <main className="content">
+          {health && health.missingProviders?.length > 0 && !advancedOpen && (
         <div className="banner warn">
           <strong>No API key for {health.missingProviders.map(providerLabel).join(' or ')}.</strong> Open Advanced
           Settings and paste a key under Access keys to start generating again.
@@ -722,7 +805,6 @@ export default function App() {
         </div>
       )}
 
-      <main>
         {legal ? (
           <LegalView doc={legal} onBack={() => setLegal(null)} contactEmail={session?.contactEmail} />
         ) : view === 'history' ? (
@@ -764,6 +846,8 @@ export default function App() {
                 productType={productType}
                 onProductType={setProductType}
                 onCreate={handleCreate}
+                etsyConnected={Boolean(etsy?.enabled && etsy?.connected)}
+                onCreateToDraft={handleCreateToDraft}
               />
             )}
 
@@ -804,6 +888,8 @@ export default function App() {
               settings={settings}
               prompts={prompts}
               canManagePrompts={!session.account || session.account.role === 'admin'}
+              etsy={etsy}
+              canManageEtsy={!session.account || session.account.role === 'admin'}
               onSaveKey={handleSaveKey}
               onRemoveKey={handleRemoveKey}
               onSaveModel={handleSaveModel}
@@ -812,6 +898,7 @@ export default function App() {
               onRemoveTheme={handleRemoveTheme}
               onSavePrompt={handleSavePrompt}
               onRemovePrompt={handleRemovePrompt}
+              onSaveEtsyDefaults={handleSaveEtsyDefaults}
               onChangePassword={handleChangePassword}
             />
           </div>
@@ -832,7 +919,8 @@ export default function App() {
             </div>
           </footer>
         )}
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

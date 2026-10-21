@@ -186,6 +186,15 @@ export const api = {
   etsyConnect: () => request('/api/etsy/connect', { method: 'POST' }),
   etsyCategories: () => request('/api/etsy/categories'),
   etsyDisconnect: () => request('/api/etsy/connection', { method: 'DELETE' }),
+  // The standing answers to Etsy's draft questions, saved once and merged into
+  // every draft. Reading them rides along with /etsy/status; these write them.
+  saveEtsyDefaults: (defaults) =>
+    request('/api/settings/etsy-defaults', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(defaults),
+    }),
+  removeEtsyDefaults: () => request('/api/settings/etsy-defaults', { method: 'DELETE' }),
   // A draft takes the seller's own answers to Etsy's required questions; the
   // title, description, tags and price are read from the listing text on the server.
   etsyDraft: (productId, fields) =>

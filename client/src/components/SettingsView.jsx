@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { providerLabel } from '../labels.js';
+import { WHO_LABELS, whenLabel } from './EtsyPanel.jsx';
 
 const SOURCE = {
   user: 'your own saved key',
@@ -261,7 +262,106 @@ function PromptCard({ types, busy, onSave, onRemove }) {
   );
 }
 
-export default function SettingsView({ settings, busy, prompts, canManagePrompts, onSave, onRemove, onSaveModel, onSaveBrand, onSaveTheme, onRemoveTheme, onSavePrompt, onRemovePrompt, onChangePassword }) {
+function EtsyDefaultsCard({ etsy, busy, canManage, onSave }) {
+  const seed = etsy?.defaults || {};
+  const [draft, setDraft] = useState({ category: '', quantity: '', whoMade: '', whenMade: '', ...seed });
+
+  // Re-seed when the saved values change (after a save, or a fresh status load),
+  // so the editor always shows what is actually stored rather than a stale draft.
+  useEffect(() => {
+    setDraft({ category: seed.category || '', quantity: seed.quantity || '', whoMade: seed.whoMade || '', whenMade: seed.whenMade || '' });
+  }, [seed.category, seed.quantity, seed.whoMade, seed.whenMade]);
+
+  const set = (key) => (event) => setDraft((prev) => ({ ...prev, [key]: event.target.value }));
+  const saved = { category: seed.category || '', quantity: seed.quantity || '', whoMade: seed.whoMade || '', whenMade: seed.whenMade || '' };
+  const dirty = Object.keys(saved).some((key) => (draft[key] || '') !== saved[key]);
+
+  function submit(event) {
+    event.preventDefault();
+    onSave({ ...draft, quantity: draft.quantity.replace(/\D/g, '') });
+  }
+
+  const filled = Object.values(saved).some(Boolean);
+
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Etsy shop defaults</h2>
+        <span className="muted small">used for every draft you send to Etsy</span>
+      </div>
+
+      <form onSubmit={submit} className="stack">
+        <label className="field">
+          <span>Category</span>
+          <input
+            type="text"
+            value={draft.category}
+            maxLength={200}
+            placeholder="Full path, e.g. Craft Supplies &gt; Patterns &gt; Digital Patterns"
+            onChange={set('category')}
+            disabled={Boolean(busy) || !canManage}
+          />
+        </label>
+        <p className="muted small">
+          Etsy needs an exact category. Leave this blank to pick it from the list in each listing's Etsy panel
+          instead — the panel offers the same choices and lets you correct one before the draft is sent.
+        </p>
+
+        <div className="etsy-fields">
+          <label className="field">
+            <span>Copies available</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={draft.quantity}
+              placeholder="e.g. 999"
+              onChange={set('quantity')}
+              disabled={Boolean(busy) || !canManage}
+            />
+          </label>
+          <label className="field">
+            <span>Who made it</span>
+            <select value={draft.whoMade} onChange={set('whoMade')} disabled={Boolean(busy) || !canManage}>
+              <option value="">Choose…</option>
+              {(etsy?.whoMade || []).map((value) => (
+                <option key={value} value={value}>{WHO_LABELS[value] || value}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>When it was made</span>
+            <select value={draft.whenMade} onChange={set('whenMade')} disabled={Boolean(busy) || !canManage}>
+              <option value="">Choose…</option>
+              {(etsy?.whenMade || []).map((value) => (
+                <option key={value} value={value}>{whenLabel(value)}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {canManage && (
+          <div className="row">
+            <button type="submit" className="primary" disabled={Boolean(busy) || !dirty}>
+              Save defaults
+            </button>
+            {filled && (
+              <button type="button" onClick={() => onSave({ category: '', quantity: '', whoMade: '', whenMade: '' })} disabled={Boolean(busy) || dirty}>
+                Clear defaults
+              </button>
+            )}
+          </div>
+        )}
+      </form>
+      <p className="muted small">
+        A price and at least one listing image are still set on each listing — Etsy will not accept a draft
+        without them, and they change too often to fix here. Whatever you leave blank here, the Etsy panel
+        asks you for.
+      </p>
+    </section>
+  );
+}
+
+export default function SettingsView({ settings, busy, prompts, canManagePrompts, etsy, canManageEtsy, onSave, onRemove, onSaveModel, onSaveBrand, onSaveTheme, onRemoveTheme, onSavePrompt, onRemovePrompt, onSaveEtsyDefaults, onChangePassword }) {
   const [brandDraft, setBrandDraft] = useState(null);
   const [localError, setLocalError] = useState('');
 
@@ -321,6 +421,10 @@ export default function SettingsView({ settings, busy, prompts, canManagePrompts
       </section>
 
       <ThemeCard theme={settings.theme} busy={busy} onSave={onSaveTheme} onRemove={onRemoveTheme} />
+
+      {etsy?.enabled && canManageEtsy && (
+        <EtsyDefaultsCard etsy={etsy} busy={busy} canManage={canManageEtsy} onSave={onSaveEtsyDefaults} />
+      )}
 
       {canManagePrompts && prompts && prompts.length > 0 && (
         <PromptCard types={prompts} busy={busy} onSave={onSavePrompt} onRemove={onRemovePrompt} />
