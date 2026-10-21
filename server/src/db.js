@@ -213,6 +213,12 @@ export async function initDb() {
   // Widen the primary keys on any local table created before ids carried an owner.
   await ddl('ALTER TABLE products ALTER COLUMN id TYPE VARCHAR(80)');
   await ddl('ALTER TABLE bulk_jobs ALTER COLUMN id TYPE VARCHAR(80)');
+  // …and the child columns that store that same owned id, or saving a listing's
+  // PDFs/images/bulk rows overflows the original VARCHAR(36).
+  await ddl('ALTER TABLE product_images ALTER COLUMN product_id TYPE VARCHAR(80)');
+  await ddl('ALTER TABLE product_documents ALTER COLUMN product_id TYPE VARCHAR(80)');
+  await ddl('ALTER TABLE bulk_rows ALTER COLUMN job_id TYPE VARCHAR(80)');
+  await ddl('ALTER TABLE bulk_rows ALTER COLUMN product_id TYPE VARCHAR(80)');
   // Phase 3: per-user daily generation quota. `generation_date` records which
   // day `generation_today` counts; when it no longer matches CURRENT_DATE the
   // day has rolled over and the count restarts. `generation_count` stays the
