@@ -1,4 +1,4 @@
-import { deleteSetting, getSetting, setSetting } from './db.js';
+import { readScoped, writeScoped, clearScoped } from './scopedSettings.js';
 
 // The brand the owner chooses in Settings. It is the only shop name this portal
 // ever writes, and the only one the scrubber is allowed to leave in place.
@@ -7,7 +7,7 @@ const SETTING = 'brand_name';
 const MAX = 40;
 
 export async function brandName() {
-  const saved = (await getSetting(SETTING))?.trim();
+  const saved = (await readScoped(SETTING)).value?.trim();
   return saved || DEFAULT_BRAND;
 }
 
@@ -30,11 +30,11 @@ export async function saveBrand(raw) {
     err.issues = issues;
     throw err;
   }
-  await setSetting(SETTING, value);
+  await writeScoped(SETTING, value);
   return value;
 }
 
 export async function clearBrand() {
-  await deleteSetting(SETTING);
+  await clearScoped(SETTING);
   return DEFAULT_BRAND;
 }

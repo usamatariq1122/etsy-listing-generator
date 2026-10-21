@@ -9,6 +9,7 @@ import { SECURITY_HEADERS } from './headers.js';
 import { IMAGE_RULES } from './rules.js';
 import { DATA_DIR, SERVER_ROOT } from './paths.js';
 import { handleApi } from './api.js';
+import { reportError } from './sentry.js';
 
 // The local dev server, for running the API on its own. Hosted, the same
 // handleApi is reached through a Netlify Function instead. Day-to-day local
@@ -95,6 +96,7 @@ const server = http.createServer(async (req, res) => {
     const status = error.status || 500;
     if (status >= 500) console.error('[error]', error);
     else console.warn(`[${status}] ${error.message}`);
+    if (status >= 500) reportError(error, { source: 'api' });
     send(res, {
       status,
       headers: { 'content-type': 'application/json; charset=utf-8' },

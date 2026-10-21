@@ -1,11 +1,12 @@
-# Etsy Digital Listing Generator
+# Listora
 
-Personal web portal that turns one product name into a complete listing package:
+Web portal that turns one product name into a complete listing package:
 
 - **File 1** — `product-content.pdf`, the customer-facing guide (validated: no brackets, citations, source references or footnotes)
-- **File 2** — `etsy-listing-seo.pdf`, SEO title, 13 tags, description, category mapping, image placement guide, checklist
+- **File 2** — `listing-seo-package.pdf`, SEO title, 13 tags, description, category mapping, image placement guide, checklist
 - **7 image prompts** — written for you to run in any image tool, plus 7 upload slots that validate every file at 4:3 / min 2000px
-- **One ZIP** — the 2 PDFs plus the images you added, named `01-cover.jpg` … `07-license.jpg`
+- **One ZIP** — `listing-package.zip`: the 2 PDFs plus the images you added, named `01-cover.jpg` … `07-license.jpg`.
+  Either PDF can be replaced by your own before you build it — see section 5
 - **History** — every product is stored in Postgres with a download link
 
 Stack: React (Vite) · Node.js backend (no framework) · Postgres (Netlify managed) ·
@@ -83,27 +84,62 @@ the proxy pointed at it: `VITE_API_TARGET=http://localhost:4000 npm run dev --pr
 
 ## 2. Using it
 
-1. Type the product name or niche, e.g. `Crochet dragon pattern`, and click **Find keyword ideas**.
-   The portal shows what shoppers actually type (live search autocomplete, cached for a day) with the
-   character count of each phrase and whether it fits a 20-character tag. Tick the ones you want to
-   use — **the first tick is treated as the main keyword** — then click **Generate listing text**.
-   Only the phrases you ticked are handed to the model. Leaving them all unticked keeps the old
-   behaviour: the portal gathers the queries itself and uses the whole list.
-   The text model then writes File 1, File 2 and the 7 image prompts (30–60 seconds). That work runs as
-   a job, not inside the click: the portal starts it and then asks for the result until it arrives, so a
-   slow model or a strict proxy cannot lose the answer. The notice bar afterwards names the
-   model that answered, and how many busy models had to be skipped on the way to it.
-2. Read the **SEO check** score under the listing text. It is a checklist of the marketplace's own
+The default screen is deliberately short: a product name box, **Generate Listing Package**, and one box for a ZIP
+of photos. Everything optional sits inside the collapsed **Advanced Settings** panel underneath it, which is
+closed until you open it. Its summary line shows how many keywords you ticked and which model is asked
+first, so you can see the state without opening it.
+
+1. Type the product name or niche, e.g. `Crochet dragon pattern`, and click **Generate Listing Package**. The text
+   model writes File 1, File 2 and the 7 image prompts (30–60 seconds). That work runs as a job, not
+   inside the click: the portal starts it and then asks for the result until it arrives, so a slow model
+   or a strict proxy cannot lose the answer. The notice bar afterwards names the model that answered, and
+   how many busy models had to be skipped on the way to it.
+2. **Advanced Settings → SEO keywords** is optional. **Find keyword ideas** shows what shoppers actually type
+   (live search autocomplete, cached for a day) with the character count of each phrase and whether it
+   fits a 20-character tag. Tick the ones you want — **the first tick is treated as the main keyword** —
+   then generate. Only the phrases you ticked are handed to the model. Left unticked, the portal gathers
+   the queries itself and uses the whole list, as before.
+3. **Advanced Settings → Model, keys and access** holds the model picker, the saved API keys, the brand name and
+   the portal password. Nothing there is needed for a normal run.
+4. Read the **Listing preview** card. It shows the title, the 13 tags, the description and the category and
+   attribute lines exactly as File 2 carries them, so you can copy them without opening the PDF. **Edit**
+   turns those three fields into boxes you can rewrite before any PDF is built — the checker under them
+   speaks the marketplace's own limits (title 140 characters, exactly 13 tags, 20 characters per tag, no
+   repeats) and refuses to save until they pass. Saving rewrites File 2 in place and reprints its PDF, so
+   the printed file never disagrees with what you typed. The marketplace name is stripped from anything
+   you enter, the same as from a model's answer. The
+   **price** box is empty until you type a number: the portal never suggests one, and the value is saved
+   with the listing so it comes back from History. The preview also states plainly that the guide is a
+   draft you have to test yourself before selling anything made from it.
+5. Read the **SEO check** score under the listing text. It is a checklist of the marketplace's own
    limits (13 tags, 20 characters per tag, no repeats) plus the two placement habits that matter, scored
    against the keywords you ticked, with the reason next to every line. It is a checklist, not a
    ranking guarantee, and it never says your listing will rank.
-3. Make the 7 images with the prompts shown under **Listing text** — paste each prompt into the image
+6. Make the 7 images with the prompts shown under **Listing text** — paste each prompt into the image
    tool you like.
-4. Open **Listing images** and pick a file for each slot. Anything that is not 4:3 or is under
-   2000px wide is refused with the reason, and nothing is saved.
-5. Click **Create ZIP**, then **Download ZIP**. Adding or replacing an image retires the old ZIP, so
-   build it last.
-6. **History** in the top-right lists every past product with its download link. Click **Open** to resume one.
+7. Put them in the **Listing photos** box as one ZIP, or open **Listing images** and pick a file for each
+   slot. Dropping the ZIP lists its images in file-name order against the 7 slots; change any row's slot
+   to reassign (an occupied slot swaps instead of dropping), then click **Fill N slots**. Each image is
+   checked by the same per-slot upload as a manual pick, so the row shows a tick with its dimensions or a
+   cross with the refusal reason. Anything that is not 4:3 or is under 2000px wide is never saved. The
+   ZIP itself is only opened in your browser — it never reaches the server or a disk.
+   When a photo is the wrong shape or too big to upload, that row offers **Crop to 4:3** / **Compress** —
+   your browser crops a centre 4:3 block and re-encodes it in place so a camera photo fits, but only after
+   you click it; nothing is ever altered without you asking. It will not shrink below 2000px wide, and if
+   the source cannot both fit 4:3 and stay that wide, it says so instead of making a file the server will
+   refuse.
+8. Look at **Package and download**. It lists the exact files the ZIP will hold — both PDFs and every
+   image — with the size and status of each one, before anything goes anywhere. If you already have your
+   own file for either PDF, click **Upload your own PDF** on that row and pick it; the row then reads
+   *Your PDF* with the name you gave the file, and **Use the portal's PDF** puts the rendered one back.
+9. Click **Create ZIP**, then **Download ZIP**. Adding or replacing an image or a PDF retires the old
+   ZIP, so build it last.
+10. If you turned Etsy on (section 5), **Create Etsy Draft** appears under the images. Answer Etsy's four
+    questions — category, copies available, who made it, when it was made — and the draft is saved to your
+    shop with the images and both PDFs attached. It is a draft: nothing is published, and nothing here can
+    publish it. Left off, you see no sign of any of this.
+11. **History** in the top-right lists every past product with its download link. Click **Open** to resume
+   one — its ticked keywords and its price come back, and the keywords show in the Advanced Settings summary.
 
 ---
 
@@ -139,8 +175,10 @@ many it removed; `normalizeShape` strips it from every prompt before the prompt 
 so nothing you copy out of the portal can trip a marketplace re-upload rule.
 
 > **Scope note.** The ban is *not* applied to File 2. File 2 is the marketplace SEO document
-> (its filename is literally `etsy-listing-seo.pdf`) and your master prompt asks it for
-> "13 Etsy search tags", so the platform name is expected there. If you want File 2 scrubbed
+> (`listing-seo-package.pdf`) and your master prompt asks it for "13 Etsy search tags", so the platform
+> name is expected there. It is a seller's working paper and never goes to a buyer. The file *names* the
+> ZIP uses — `product-content.pdf`, `listing-seo-package.pdf`, `listing-package.zip` — carry no
+> marketplace word, so nothing you hand over or upload is labelled with one. If you want File 2 scrubbed
 > too, scrub `result.file2_text` in `server/src/service.js`.
 
 **Mockup prompts** are asked for as 4:3 landscape shots ending in `no text, no logos` (the rule lives in
@@ -228,7 +266,7 @@ were skipped`.
 
 ---
 
-## 5. Listing images
+## 5. Listing images and PDFs
 
 The portal does not generate images. It produces the 7 prompts, and you bring the finished files
 back — from your own camera, your own renders, or any image tool you like.
@@ -263,6 +301,67 @@ A PNG upload keeps a `.png` extension; the number and name never change.
 
 The rules above are the single `IMAGE_RULES` object in `server/src/rules.js`.
 
+**Two ways in.** Either pick a file for one slot under *Listing images*, or drop **one ZIP** of up to 7
+images on the *Listing photos* box. The ZIP is opened in the browser by `client/src/unpack.js`
+(fflate), never uploaded: it rejects an unsafe member path, a nested archive, any compression the
+browser cannot read, more than 7 images, and a set that would unpack past 100 MB, while ignoring
+`__MACOSX`, `.DS_Store`, `Thumbs.db` and non-image files instead of failing on them. What is left is
+listed in `ZipSlots.jsx` in file-name order, one row per slot, and you can change any row's slot —
+choosing an occupied slot swaps the two images rather than dropping one. **Fill N slots** then posts
+each file through the same per-slot route as a manual upload, so the server's rules stay the only
+gate: every row shows a green check with its real dimensions or a red cross quoting the exact 422
+reason, and accepted files go under their numbered names on the next ZIP build.
+
+**The two PDFs, yours or the portal's.** Each deliverable is one row in the `product_documents` table:
+`generated` for the PDF printed from the listing text, `uploaded` for a PDF you put in its place. The
+upload goes to `PUT /api/products/:id/document/:fileKey` and is checked by `server/src/pdfcheck.js`
+before a byte is stored — the `%PDF-` header in the first kilobyte, the `%%EOF` trailer in the last one,
+and a size under `PDF_RULES.maxBytes` (25 MB locally, about 4 MB hosted). A file extension is never
+believed on its own; renaming a Word document to `.pdf` gets *"That file is not a PDF, whatever it is
+called."* The uploaded file is then stored **under the deliverable's own name**, so the ZIP entry never
+changes and the name you gave your file stays in the row as `original_name` for the table to show you.
+Deleting the upload (`DELETE` on the same route) removes it and re-registers the rendered PDF, which is
+still in storage, so **Use the portal's PDF** costs nothing and re-renders only if that file is gone.
+Neither upload nor restore is ever packed silently: both retire the old ZIP, exactly like an image
+change does.
+
+**A draft in your own shop — optional, off by default.** Nothing about Etsy appears anywhere in the
+interface until `ETSY_ENABLED=true` is set along with `ETSY_KEYSTRING` and `ETSY_SHARED_SECRET`, from
+an app you register at `etsy.com/developers/register`. **Etsy must approve that key before anything
+here works** — an unapproved key is refused by every endpoint, and the portal says so in Etsy's own
+words rather than pretending the shop is broken. The ZIP download is the primary route to a listing
+and does not care about any of this.
+
+When it is on, one **Connect Etsy Shop** button starts OAuth 2.0 with PKCE: the portal builds a random
+43-character verifier, sends only its SHA-256 as the challenge, and keeps the pair (with a one-use
+`state`) encrypted in the database for ten minutes. Etsy redirects back to `/api/etsy/callback`, which
+exchanges the code and stores the tokens; the callback only ever answers with a redirect into the
+studio, carrying a sentence, never a token. Only the `listings_w` scope is requested, which is the
+minimum that can create a draft.
+
+Tokens live in the `settings` table inside the same AES-256-GCM envelope as your API keys
+(`server/src/secrets.js`), are refreshed automatically a minute before their hour is up, and are never
+written to a log, returned to the browser, or shown in the interface — which sees only the shop's name.
+The shop is chosen from the numeric user id at the front of the access token; if that account has more
+than one shop, the portal refuses to guess.
+
+**Create Etsy Draft** then follows the order Etsy documents for a digital product, in
+`server/src/draft.js`: `createDraftListing` → `uploadListingImage` for each filled slot, in ZIP order →
+`uploadListingFile` for both PDFs → `updateListing` with `type=download` (files cannot be attached
+during create) → `getListing` to read it back. It sends the title, description, 13 tags and the price
+you typed, plus two questions only you can answer — *who made it* and *when it was made* — and the
+category you picked from Etsy's own tree. It **cannot** publish: no `state` is ever sent, `listings_d`
+is never requested, so nothing here can delete a listing either. What comes back is Etsy's draft link,
+kept on the product row so History shows it again and a second click is refused instead of making a
+second listing. If a later step fails, the message says how far it got and gives you the link, so the
+half-built draft is never an orphan you cannot find.
+
+The category tree itself is public data: `server/src/taxonomy.js` fetches it once a day, flattens it to
+leaf paths and caches it in `taxonomy_cache`, and the studio filters that locally — so typing a
+category costs no requests, and choosing one Etsy has never heard of is refused before anything is
+sent. The marketplace name stays out of every generated file: it appears in this README, in the server
+code and in the connection screen, and never in a PDF, a prompt or an image.
+
 ---
 
 ## 6. Project layout
@@ -288,8 +387,12 @@ Etsy portal/
 │       ├── modelCatalog.js   reads server/models.json on every request
 │       ├── db.js             Postgres: Netlify's managed database hosted, `netlify dev`'s locally
 │       ├── secrets.js        AES-256-GCM for the API keys stored in the database
+│       ├── httperror.js      the one error type the API throws: a message, a status, extra fields
 │       ├── headers.js        the four security headers, for API responses
 │       ├── files.js          listing files: disk locally, Netlify Blobs when hosted
+│       ├── etsy.js           the Etsy OAuth flow and the six calls a draft needs (off by default)
+│       ├── taxonomy.js       Etsy's category tree, flattened and cached for a day
+│       ├── draft.js          the order a digital draft is built in: listing, images, files, type
 │       ├── generate.js       the listing-text job: run it, record the result or the failure
 │       ├── masterPrompt.js   your master prompt + the JSON output contract (git-ignored)
 │       ├── masterPrompt.example.js  generic stand-in that `npm run setup` copies
@@ -304,19 +407,31 @@ Etsy portal/
 │       ├── textgen.js        provider dispatch in the chosen order, model failover
 │       ├── retry.js          transient-failure retry with a time budget
 │       ├── validate.js       File 1 cleaning/validation, SEO repair and alignment
+│       ├── listingFields.js  reads the title/tags/description back out of File 2
+│       ├── listingEdit.js    writes a seller's edit back into File 2, then checks it landed
 │       ├── service.js        generate-with-retry pipeline + the guide quality gate
 │       ├── imageinfo.js      reads JPG/PNG width and height from the file header
+│       ├── imagegen.js       free slot-image drawing: Cloudflare Workers AI or Pollinations, then the slot checks
+│       ├── bulk.js           reads a CSV of product names into rows for the bulk screen
 │       ├── uploads.js        validate + store + remove one slot image
-│       ├── zip.js            PDF rendering + ZIP packaging (PDFs + uploaded images)
+│       ├── pdfcheck.js       proves an uploaded file really is a PDF, and within the size limit
+│       ├── theme.js          the four PDF colours a seller saves in Settings, over the built-in palette
+│       ├── zip.js            PDF rendering, your-PDF-or-the-portal's choice, ZIP packaging
 │       ├── slots.js          the 7 slot definitions
 │       └── paths.js          file keys + id sanitising
+│   └── test/                 `node:test` suites for the rules that must never slip: validate,
+│                             listingFields, slots, imageinfo, seoCheck, keywords, auth, retry/jsonparse
 └── client/
     └── src/
         ├── App.jsx           state, loading banners, error banners
         ├── api.js            fetch wrapper + the polling loop
         ├── labels.js         status labels
-        └── components/       Login, ProductForm, KeywordPicker, Workspace, TextPreview,
-                              SeoScore, UploadSlots, PackagePanel, HistoryView, SettingsView
+        ├── unpack.js         opens your ZIP in the browser: nothing is written to disk
+        ├── fitImage.js       crops a centre 4:3 block and re-encodes an image in the browser
+        ├── legal.js          the Terms of Service and Privacy Policy text
+        └── components/       Login, LegalView, ProductForm, ZipDrop, ZipSlots, AdvancedPanel,
+                              KeywordPicker, Workspace, ListingPreview, TextPreview, SeoScore,
+                              UploadSlots, PackagePanel, EtsyPanel, HistoryView, SettingsView
 ```
 
 ---
@@ -335,12 +450,23 @@ Etsy portal/
 | GET | `/api/keywords?q=<niche>` | the tick screen's suggestions: each phrase, its length and whether it fits a tag |
 | POST | `/api/run/:id` | start (or restart) that product's listing-text job |
 | GET | `/api/products/:id` | one product with per-slot status; poll it until `status` is `text` or `failed` |
+| POST | `/api/bulk` | create a batch from CSV text (`{ name, csv }`) — one product per row, capped at 50; returns the rows to run |
+| GET | `/api/bulk` | recent batches with their row counts |
+| GET | `/api/bulk/:id` | one batch and its rows with status |
+| PUT | `/api/bulk/:id/row/:idx` | record a row's status as it runs (`queued` / `running` / `done` / `failed`) |
+| POST | `/api/bulk/:id/retry` | send every failed row back to the queue and return them |
+| DELETE | `/api/bulk/:id` | forget the batch (the products it made stay in History) |
+| PUT | `/api/products/:id/price` | store the price you typed (`""` clears it); a non-number is refused |
+| PUT | `/api/products/:id/listing` | rewrite the title, tags or description in File 2 and reprint its PDF; a marketplace name is stripped and an edit that would not fit is refused |
 | POST | `/api/products/:id/image/:slotId` | upload one listing image (raw JPG/PNG body) |
+| POST | `/api/products/:id/image/:slotId/generate` | draw this slot's own listing prompt into the slot — free image generation, Cloudflare Workers AI when `CLOUDFLARE_ACCOUNT_ID`/`CLOUDFLARE_API_TOKEN` are set, otherwise Pollinations.ai (no key); the result goes through the same 4:3 / 2000px / JPG-PNG checks as an upload |
 | DELETE | `/api/products/:id/image/:slotId` | remove that image |
+| PUT | `/api/products/:id/document/:fileKey` | use your own PDF for `file1_text` or `file2_text` (raw PDF body, `?name=` for the label) |
+| DELETE | `/api/products/:id/document/:fileKey` | drop your PDF and print that deliverable from the listing text again |
 | POST | `/api/products/:id/package` | build the ZIP |
 | GET | `/api/products/:id/download` | download the ZIP |
 | GET | `/api/products/:id/image/:slotId` | preview one image |
-| GET | `/api/products/:id/text/:fileKey` | download `file1_text` or `file2_text` |
+| GET | `/api/products/:id/text/:fileKey` | download one deliverable PDF — yours if you uploaded one, the rendered one otherwise |
 | GET | `/api/products/slots` | the 7 slot definitions + image rules |
 | GET | `/api/settings` | provider, saved key status and available models |
 | PUT | `/api/settings/key` | save a provider key — `gemini`, `anthropic`, `groq` or `openrouter` (applies to the next request) |
@@ -349,6 +475,17 @@ Etsy portal/
 | DELETE | `/api/settings/model` | go back to the `.env` model |
 | PUT | `/api/settings/brand` | save the brand name used in PDFs and prompts |
 | DELETE | `/api/settings/brand` | reset the brand name to the built-in placeholder |
+| PUT | `/api/settings/theme` | save the four PDF colours (`ink`, `accent`, `muted`, `hairline`), hex only |
+| DELETE | `/api/settings/theme` | drop the saved colours and print in the built-in palette again |
+| GET | `/api/etsy/status` | is Etsy switched on, is a shop connected, its name, and Etsy's own answer options |
+| POST | `/api/etsy/connect` | the Etsy sign-in URL (PKCE challenge + a one-use state, both kept encrypted) |
+| GET | `/api/etsy/callback` | where Etsy sends the browser back to; exchanges the code and redirects into the studio |
+| GET | `/api/etsy/categories` | Etsy's category tree, flattened to leaf paths and cached for a day |
+| POST | `/api/etsy/draft` | save this package in the connected shop as a draft listing |
+| DELETE | `/api/etsy/connection` | forget the shop's tokens; nothing on Etsy is touched |
+
+The five `/api/etsy/*` routes after `status` answer 503 until `ETSY_ENABLED`, `ETSY_KEYSTRING` and
+`ETSY_SHARED_SECRET` are all set, so a build without the flag has no way to reach Etsy by accident.
 
 Everything except the four `/api/auth/*` routes needs the `listing_session` cookie as soon as a
 password exists. Hosted, there is no way round that: a deployment with no password yet answers every
@@ -452,16 +589,40 @@ PNG, crop to 4:3, and upload again.
 **Upload rejected: "Wrong shape: 3000x2000 is 1.500:1"**
 Your file is 3:2, not 4:3. Crop it to 4:3 (e.g. 3000x2250 or 2000x1500) and upload again.
 
-**My ZIP is missing an image**
-The ZIP is a snapshot of whatever was in the slots when you clicked **Create ZIP**. If you added or
-replaced an image afterwards, the old ZIP is deleted and the button reads **Create ZIP** again. Build
-it last.
+**My ZIP is missing an image or a PDF**
+The ZIP is a snapshot of whatever was in the slots and in **Package and download** when you clicked
+**Create ZIP**. If you added or replaced an image or uploaded your own PDF afterwards, the old ZIP is
+deleted and the button reads **Create ZIP** again. Build it last.
+
+**My own PDF is refused**
+*"That file is not a PDF, whatever it is called."* — the file has no `%PDF-` header or no `%%EOF`
+trailer, so it is a Word, Pages or screenshot file with a `.pdf` name on it. Export it as a PDF from
+the program that made it. *"That file is N MB."* — over the limit this host accepts (25 MB on your own
+machine, about 4 MB hosted); export it with a smaller/pressed option. Either way nothing is stored and
+the row keeps the portal's own PDF.
+
+**Etsy says nothing**
+*"Etsy is not switched on here…"* — 503 from any `/api/etsy/*` route except `status`. Set
+`ETSY_ENABLED=true`, `ETSY_KEYSTRING` and `ETSY_SHARED_SECRET`, and a matching `ETSY_REDIRECT_URI`, then
+restart (locally) or redeploy (hosted). Off, the studio shows no Etsy section at all.
+*"Etsy would not allow that. Your app key has to be approved by Etsy…"* — a 403, and almost always the
+approval itself: **a new app key stays unusable until Etsy marks it approved** under *Manage Your Apps*.
+Nothing in this portal can speed that up, and the ZIP download is unaffected while you wait. The same
+sentence appears when the key lacks the `listings_w` permission.
+*"That sign-in request has already been used. Start again."* / *"Etsy sent back a different request."* —
+the PKCE pair and the `state` are one-use and expire in ten minutes, so a refreshed or second callback
+is refused rather than retried. Click **Connect Etsy Shop** again and let it finish in one go.
+*"This Etsy account has more than one shop…"* — the portal will not guess which shop to write to.
+*"Etsy requires a price, and only you set that."* — the price box is empty; type it in the listing
+preview and try again. A draft that fails halfway reports how many images and files got onto it and
+gives you the draft link, so it is never an orphan listing you cannot find.
 
 **I want to start with a clean history**
 Use **History → Clear all** in the browser; it removes the rows and the files. The SQL equivalent has
-to go through `product_images` first, because `products` is referenced by it:
+to go through the tables that reference `products` first:
 ```sql
 DELETE FROM product_images;
+DELETE FROM product_documents;
 DELETE FROM products;
 ```
 Locally that is `netlify database connect` (or any client pointed at `DATABASE_URL`), then delete the
@@ -483,6 +644,7 @@ publishes it, so changes made here appear on the site without any manual step.
 | PDFs, uploaded images, ZIPs | Netlify Blobs store `listing-files`, under `products/<id>/…` |
 | API keys | **Settings → Access keys** in the deployed app, which writes them to your database encrypted with AES-256-GCM, or site secrets for `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` |
 | the key that decrypts them | the `ENCRYPTION_KEY` site secret — never stored with the data it unlocks |
+| error tracking (optional) | Sentry via the `SENTRY_DSN` site secret — server-side only; with no DSN set, nothing is reported and nothing is sent |
 | browser protection | CSP, HSTS, `X-Content-Type-Options` and `Referrer-Policy`, from `netlify.toml` on the static files and from `server/src/headers.js` on every API response |
 
 What changes when it is hosted:
@@ -492,8 +654,23 @@ What changes when it is hosted:
   session cookie it hands out. Netlify's own site-password feature is not on the free plan, so the
   gate lives in the app. Locally the portal stays open until you create a password yourself in
   **Settings → Portal password**.
-- **Uploads are capped near 4 MB**, because one Function invocation cannot carry the 25 MB a local
-  disk accepts. Compress the image, or run the portal on your own machine for full-resolution files.
+- **Named accounts, each with their own things.** On top of that password gate the portal now signs
+  people in by email and password (`server/src/auth.js`, one scrypt hash per account, sessions as
+  opaque database rows under a separate `listora_account` cookie). The first account created is the
+  owner/admin. Every listing carries its owner in the id (`<uid>:<pid>`), so blobs live under
+  `users/<uid>/products/<pid>/…` and one account can never read or delete another's work. The API
+  key, model choice, brand and PDF theme you save in Settings are stored per account and used for
+  that account's generations only, falling back to the shared value and then the server environment
+  when you have not saved your own — so a signed-in user can bring their own key instead of spending
+  the portal's. Account email (verification and reset) runs through Resend and stays inert without a
+  `RESEND_API_KEY`.
+- **Each account is capped per day.** `GENERATION_DAILY_LIMIT` (default 20) bounds how many listing
+  generations one signed-in account may start per day; the owner is exempt and a value of 0 lifts the
+  cap. The counter rolls over at midnight UTC and is charged the moment a generation is spent, so a
+  full account is stopped before the model is ever called.
+- **Uploads are capped near 4 MB**, image or PDF, because one Function invocation cannot carry the
+  25 MB a local disk accepts. Compress the file, or run the portal on your own machine for
+  full-resolution files.
 - **The private files stay private.** `masterPrompt.js`, `rules.js` and `.env` are git-ignored, so a
   cloned or hosted build gets the generic `*.example.js` copies that `npm run setup` writes during the
   build. Edit your own wording locally; publish only the tool. A deployment built from this public
@@ -506,6 +683,16 @@ What changes when it is hosted:
   and redeploy. From the next start, keys you save in Settings are stored encrypted, and any key row
   that predates it is rewritten encrypted automatically. Leaving it out is supported: everything keeps
   working, keys are simply kept in the clear.
+- **Error tracking stays off until you point it somewhere.** Add a `SENTRY_DSN` site secret and
+  redeploy to start collecting 500s from the API, the background listing job, and browser crashes —
+  the browser's own errors go to `/api/client-error`, which forwards them with the write-only key held
+  only on the server. With no DSN, `sentryEnabled()` is false, the route answers `204` and no network
+  request is ever made, so an install without Sentry is exactly as quiet as it was before.
+- **Etsy stays invisible until you turn it on.** Three site secrets — `ETSY_ENABLED=true`,
+  `ETSY_KEYSTRING`, `ETSY_SHARED_SECRET` — plus `ETSY_REDIRECT_URI` set to
+  `https://<your site>/api/etsy/callback`, exactly as registered with the app. Without them no
+  Etsy-related word, button or request exists, and the ZIP path is byte for byte what it was. See
+  section 5 for what the connection can and cannot do.
 
 ### What it costs
 

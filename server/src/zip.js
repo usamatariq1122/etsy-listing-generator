@@ -3,54 +3,125 @@ import { PassThrough } from 'node:stream';
 import archiver from 'archiver';
 import { textToPdf } from './pdf.js';
 import { TEXT_FILES } from './documents.js';
-import { documentKey, imageKey, productPrefix, zipKey } from './paths.js';
+import { documentKey, imageKey, productPrefix, uploadedDocumentKey, zipKey } from './paths.js';
 import { deleteFile, deletePrefix, fileExists, getFile, putFile } from './files.js';
-import { listProductImages } from './db.js';
+import {
+  deleteProductDocument,
+  getProductDocument,
+  listProductImages,
+  saveProductDocument,
+} from './db.js';
 import { brandName } from './brand.js';
+import { themeColors } from './theme.js';
 
-/** Renders the listing documents as PDFs and stores them. */
+/**
+ * Renders the listing documents as PDFs and stores them. The bytes are returned
+ * per file key because the storage behind this is not guaranteed to hand back a
+ * file in the same call that wrote it, and no caller should have to guess.
+ */
 export async function writeDocuments(product, onlyKey) {
   const brand = await brandName();
+  const theme = await themeColors();
   const files = TEXT_FILES.filter((file) => !onlyKey || file.key === onlyKey);
-  await Promise.all(
+  const rendered = await Promise.all(
     files.map(async (file) => {
       const pdf = await textToPdf(product[file.key], file.docTitle(product), file.subtitle(product), {
         cover: file.cover,
         brand,
+        theme,
       });
       await putFile(documentKey(product.id, file.name), pdf);
+      // A PDF the seller uploaded stays the one being packed, so its row is left alone.
+      const row = await getProductDocument(product.id, file.key);
+      if (row?.source !== 'uploaded') {
+        await saveProductDocument({
+          productId: product.id,
+          fileKey: file.key,
+          source: 'generated',
+          fileName: file.name,
+          bytes: pdf.length,
+        });
+      }
+      return [file.key, pdf];
+    }),
+  );
+  return new Map(rendered);
+}
+
+/**
+ * Removes the PDFs this portal rendered, so a stale copy is never offered for
+ * download. An uploaded PDF belongs to the seller and is kept.
+ */
+export async function removeDocuments(product, onlyKey) {
+  const files = TEXT_FILES.filter((file) => !onlyKey || file.key === onlyKey);
+  await Promise.all(
+    files.map(async (file) => {
+      await deleteFile(documentKey(product.id, file.name));
+      const row = await getProductDocument(product.id, file.key);
+      if (row?.source !== 'uploaded') await deleteProductDocument(product.id, file.key);
     }),
   );
 }
 
-/** Removes the stored PDFs so a stale copy is never offered for download. */
-export async function removeDocuments(product, onlyKey) {
-  const files = TEXT_FILES.filter((file) => !onlyKey || file.key === onlyKey);
-  await Promise.all(files.map((file) => deleteFile(documentKey(product.id, file.name))));
+/** The PDF bytes for one deliverable, rendering them first if they are missing. */
+export async function documentBytes(product, fileKey) {
+  const file = TEXT_FILES.find((entry) => entry.key === fileKey);
+  const generated = documentKey(product.id, file.name);
+  const row = await getProductDocument(product.id, fileKey);
+
+  if (row?.source === 'uploaded') {
+    const uploaded = await getFile(uploadedDocumentKey(product.id, row.file_name));
+    if (uploaded) return { key: uploadedDocumentKey(product.id, row.file_name), name: file.name, bytes: uploaded };
+    await deleteProductDocument(product.id, fileKey);
+  } else {
+    const stored = await getFile(generated);
+    if (stored) return { key: generated, name: file.name, bytes: stored };
+  }
+
+  const rendered = await writeDocuments(product, fileKey);
+  return { key: generated, name: file.name, bytes: rendered.get(fileKey) ?? null };
 }
 
-/** The PDF bytes for one deliverable, rendered on demand if they are missing. */
-export async function documentBytes(product, fileKey) {
-  const key = documentKey(product.id, TEXT_FILES.find((file) => file.key === fileKey).name);
-  const stored = await getFile(key);
-  if (stored) return { key, bytes: stored };
-  await writeDocuments(product, fileKey);
-  return { key, bytes: await getFile(key) };
+/**
+ * Keeps a PDF the seller uploaded in place of the one this portal would render.
+ * It is stored under the deliverable's own name so the ZIP entry never changes.
+ */
+export async function keepUploadedPdf(product, file, originalName, buffer) {
+  await putFile(uploadedDocumentKey(product.id, file.name), buffer);
+  await saveProductDocument({
+    productId: product.id,
+    fileKey: file.key,
+    source: 'uploaded',
+    fileName: file.name,
+    originalName,
+    bytes: buffer.length,
+  });
+}
+
+/** Forgets an upload and goes back to the PDF rendered from the listing text. */
+export async function restoreGeneratedPdf(product, file) {
+  await deleteFile(uploadedDocumentKey(product.id, file.name));
+  await deleteProductDocument(product.id, file.key);
+  const stored = await getFile(documentKey(product.id, file.name));
+  if (stored) {
+    await saveProductDocument({
+      productId: product.id,
+      fileKey: file.key,
+      source: 'generated',
+      fileName: file.name,
+      bytes: stored.length,
+    });
+  }
 }
 
 export const removeProductFiles = (productId) => deletePrefix(productPrefix(productId));
 
-/** Builds etsy-listing-package.zip from the two PDFs and any uploaded images. */
+/** Builds the listing package ZIP: the two PDFs plus any uploaded images. */
 export async function buildZip(product) {
-  await writeDocuments(product);
-
   const images = await imagesForZip(product.id);
-  const documents = await Promise.all(
-    TEXT_FILES.map(async (file) => ({
-      name: file.name,
-      bytes: await getFile(documentKey(product.id, file.name)),
-    })),
-  );
+  const documents = (
+    await Promise.all(TEXT_FILES.map(async (file) => documentBytes(product, file.key)))
+  ).map((found) => ({ name: found.name, bytes: found.bytes }));
   const parts = [...documents, ...images].filter((part) => part.bytes);
 
   const archive = archiver('zip', { zlib: { level: 9 } });
@@ -77,6 +148,7 @@ export async function buildZip(product) {
     name: path.basename(target),
     bytes: bytes.length,
     entries: parts.map((part) => part.name),
+    documents: documents.filter((part) => part.bytes).length,
     images: images.length,
   };
 }

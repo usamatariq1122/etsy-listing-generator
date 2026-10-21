@@ -7,7 +7,8 @@
   "scripts": {
     "setup": "node scripts/setup-assets.mjs",
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "test": "node --experimental-test-module-mocks --test \"test/*.test.js\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

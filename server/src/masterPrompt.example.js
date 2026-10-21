@@ -2,6 +2,7 @@
 // masterPrompt.js (npm run setup does that) and edit it into your own brief -
 // the file the app actually loads is git-ignored, so your wording stays private.
 import { BANNED_WORD } from './rules.js';
+import { currentPromptBody } from './requestContext.js';
 
 const ROLE = `You write complete listing packages for handmade and digital craft products.
 You know what buyers of a digital pattern ask after: finished size, skill level, yarn or
@@ -39,9 +40,16 @@ function keywordBlock(keywords) {
     + 'Use the others as tags where they fit the character limit, and never reorder the list.';
 }
 
+/** The built-in brief, used verbatim when a product type has no saved template. */
+export const DEFAULT_PROMPT_BODY = `${ROLE}\n\n${TASK}`;
+
 export function buildSystemPrompt(productName, brand, keywords = []) {
   const shop = String(brand ?? '').trim() || 'the shop';
-  return `${ROLE}\n\n${TASK}${OUTPUT_CONTRACT}${keywordBlock(keywords)}`
+  // A generation may have primed a customised body for its product type; with
+  // none in flight this is the built-in wording, and the contract below always
+  // still applies so the JSON shape never changes.
+  const body = currentPromptBody() ?? DEFAULT_PROMPT_BODY;
+  return `${body}${OUTPUT_CONTRACT}${keywordBlock(keywords)}`
     .replaceAll('{{brand}}', shop)
     .trim()
     + `\n\nThe product to write for is: ${productName}.`;

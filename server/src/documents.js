@@ -1,4 +1,5 @@
-// The two PDF deliverables each listing produces.
+// The two PDF deliverables each listing produces. A marketplace name never
+// appears in one of these - they are the files a buyer can end up holding.
 export const TEXT_FILES = [
   {
     key: 'file1_text',
@@ -10,9 +11,9 @@ export const TEXT_FILES = [
   },
   {
     key: 'file2_text',
-    name: 'etsy-listing-seo.pdf',
+    name: 'listing-seo-package.pdf',
     title: 'Listing SEO Package',
-    docTitle: () => 'Etsy Listing & SEO Package',
+    docTitle: () => 'Listing & SEO Package',
     subtitle: (product) => product.product_name,
   },
 ];

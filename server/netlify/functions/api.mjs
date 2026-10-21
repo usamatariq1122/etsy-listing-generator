@@ -1,7 +1,9 @@
+import crypto from 'node:crypto';
 import { handleApi } from '../../src/api.js';
 import { initDb } from '../../src/db.js';
 import { encryptStoredKeys } from '../../src/secrets.js';
 import { SECURITY_HEADERS } from '../../src/headers.js';
+import { reportError } from '../../src/sentry.js';
 
 // Every /api/* route except the generation job, which needs longer than a
 // normal invocation and lives in run.mjs.
@@ -50,6 +52,7 @@ export default async (request) => {
   } catch (error) {
     const status = error.status || 500;
     if (status >= 500) console.error('[api]', error);
+    if (status >= 500) reportError(error, { source: 'api', requestId: crypto.randomUUID() });
     return Response.json(
       { error: error.message || 'Something went wrong.', ...(error.issues ? { issues: error.issues } : {}) },
       { status, headers: SECURITY_HEADERS },

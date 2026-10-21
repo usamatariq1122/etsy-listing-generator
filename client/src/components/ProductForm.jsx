@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import KeywordPicker from './KeywordPicker.jsx';
 
-export default function ProductForm({ busy, onCreate }) {
-  const [productName, setProductName] = useState('');
-  const [picked, setPicked] = useState([]);
+const AUTO = [{ value: 'general', label: 'Auto-detect' }];
+
+export default function ProductForm({ busy, productName, onProductName, productTypes, productType, onProductType, onCreate }) {
   const [localError, setLocalError] = useState('');
+  const types = productTypes?.length ? productTypes : AUTO;
 
   function submit(event) {
     event.preventDefault();
@@ -13,7 +13,7 @@ export default function ProductForm({ busy, onCreate }) {
       return;
     }
     setLocalError('');
-    onCreate(productName.trim(), picked);
+    onCreate();
   }
 
   return (
@@ -28,24 +28,36 @@ export default function ProductForm({ busy, onCreate }) {
             value={productName}
             maxLength={200}
             placeholder="e.g. Crochet dragon pattern, printable wall art, Notion budget planner"
-            onChange={(e) => setProductName(e.target.value)}
+            onChange={(e) => onProductName(e.target.value)}
             disabled={Boolean(busy)}
           />
         </label>
 
-        <KeywordPicker productName={productName} busy={busy} picked={picked} onPicked={setPicked} />
+        <label className="field">
+          <span>Product type</span>
+          <select value={productType || 'general'} onChange={(e) => onProductType(e.target.value)} disabled={Boolean(busy)}>
+            {types.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="muted small">
+          Auto-detect lets the model infer the type from the name. Pick a specific type to write from the brief
+          you have set for it under Advanced Settings.
+        </p>
 
         {localError && <p className="inline-error">{localError}</p>}
 
         <button type="submit" className="primary" disabled={Boolean(busy)}>
-          {busy ? 'Working…' : 'Generate listing text'}
+          {busy ? 'Working…' : 'Generate Listing Package'}
         </button>
       </form>
 
       <p className="muted small">
-        The text model writes File 1 (product-content.pdf), File 2 (etsy-listing-seo.pdf) and the 7 image prompts.
-        File 1 is automatically checked for brackets, citations, source references and footnotes, and the listing
-        fields are then scored against the keywords you ticked.
+        The two PDF files and the 7 image prompts are written for you, then packed with your photos into one
+        ZIP. Keywords, model and API keys sit under Advanced Settings below, and nothing there is required.
       </p>
     </section>
   );

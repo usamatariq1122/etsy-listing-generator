@@ -1,4 +1,5 @@
 import TextPreview from './TextPreview.jsx';
+import ListingPreview from './ListingPreview.jsx';
 import UploadSlots from './UploadSlots.jsx';
 import PackagePanel from './PackagePanel.jsx';
 import SeoScore from './SeoScore.jsx';
@@ -8,8 +9,13 @@ export default function Workspace({
   busy,
   onRegenerateText,
   onPackage,
+  onSavePrice,
+  onSaveListing,
+  onUploadPdf,
+  onRestorePdf,
   onUploadImage,
   onRemoveImage,
+  onGenerateImage,
   onStartOver,
 }) {
   const hasText = Boolean(product.file1Text && product.file2Text);
@@ -31,6 +37,8 @@ export default function Workspace({
         </div>
       </section>
 
+      <ListingPreview product={product} busy={busy} onSavePrice={onSavePrice} onSaveListing={onSaveListing} />
+
       <section className="card">
         <h2>Listing text</h2>
         {hasText ? (
@@ -49,12 +57,19 @@ export default function Workspace({
           busy={busy}
           onUpload={onUploadImage}
           onRemove={onRemoveImage}
+          onGenerate={onGenerateImage}
         />
       </section>
 
       <section className="card">
         <h2>Package and download</h2>
-        <PackagePanel product={product} busy={busy} onPackage={onPackage} />
+        <PackagePanel
+          product={product}
+          busy={busy}
+          onPackage={onPackage}
+          onUploadPdf={onUploadPdf}
+          onRestorePdf={onRestorePdf}
+        />
       </section>
     </div>
   );

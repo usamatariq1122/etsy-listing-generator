@@ -72,7 +72,7 @@ body::before {
 }
 .subtitle { margin: 6px 0 0; color: var(--muted); font-size: 13.5px; }
 
-nav { display: flex; gap: 8px; }
+nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .nav {
   border: 1px solid var(--line); background: var(--glass); color: var(--ink);
   padding: 9px 18px; border-radius: 999px; cursor: pointer; font-size: 14px;
@@ -83,6 +83,13 @@ nav { display: flex; gap: 8px; }
   border-color: var(--accent-glow); color: var(--accent); font-weight: 600;
   background: var(--accent-soft);
 }
+.nav.who {
+  cursor: default; display: inline-flex; align-items: center;
+  color: var(--muted); font-size: 13px; max-width: 200px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.nav.who:hover { border-color: var(--line); }
+.login-switch { gap: 16px; margin-top: 4px; flex-wrap: wrap; }
 
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
@@ -96,7 +103,7 @@ nav { display: flex; gap: 8px; }
 .field { display: block; border: 0; padding: 0; margin: 0 0 16px; }
 .field.shrink { flex: 0 1 280px; margin-bottom: 0; }
 .field > span, .field > legend { display: block; font-weight: 600; margin-bottom: 6px; font-size: 14px; }
-input[type="text"], input[type="password"], select {
+input[type="text"], input[type="email"], input[type="password"], select {
   width: 100%; padding: 12px 14px; border: 1px solid var(--line);
   border-radius: var(--radius-sm); font-size: 15px; color: var(--ink);
   background: rgba(255, 255, 255, 0.05); transition: border-color 0.18s, box-shadow 0.18s;
@@ -110,8 +117,8 @@ code {
   border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px;
 }
 .key-row + .key-row { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
-input[type="text"]::placeholder, input[type="password"]::placeholder { color: #6d7b86; }
-input[type="text"]:focus, input[type="password"]:focus, select:focus {
+input[type="text"]::placeholder, input[type="email"]::placeholder, input[type="password"]::placeholder { color: #6d7b86; }
+input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, select:focus {
   outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(16, 201, 138, 0.22);
 }
@@ -139,6 +146,24 @@ button.danger { background: rgba(244, 63, 94, 0.12); border-color: rgba(244, 63,
 button.danger:hover:not(:disabled) { background: rgba(244, 63, 94, 0.22); border-color: rgba(244, 63, 94, 0.7); }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* Card heading with a short note on the same line: baseline-align the two and let
+   the container own the spacing, so the note never rides above or below the title. */
+.card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.card-head h2 { margin: 0; }
+/* An input plus its action button: the field grows, the button sits flush after it,
+   both lined up on the input's bottom edge. */
+.field-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.field-row > .field:not(.shrink) { flex: 1 1 240px; margin-bottom: 0; }
+.field-row .muted { flex: 1 1 260px; }
+/* Equal colour swatches that reflow into rows instead of uneven fixed-width boxes. */
+.color-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+.color-grid .field { margin-bottom: 0; }
+.color-grid input[type="color"] { width: 100%; height: 42px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.05); cursor: pointer; }
+/* Admin summary tiles: a big number over a small label, in a reflowing row. */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.stat { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--glass); padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.stat-value { font-size: 26px; font-weight: 700; line-height: 1.1; }
+.stat-label { color: var(--muted); font-size: 13px; }
 
 .banner {
   border-radius: var(--radius-sm); padding: 13px 16px; margin-bottom: 14px; font-size: 14px;
@@ -189,10 +214,14 @@ details[open] summary::after { content: "\2212"; }
 }
 
 table.manifest { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-scroll table.manifest { min-width: 560px; }
 table.manifest th, table.manifest td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 table.manifest tbody tr:hover { background: var(--glass); }
 table.manifest th { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 table.manifest td.name { font-weight: 600; }
+table.manifest td.bad { color: #fda4af; font-weight: 600; }
+table.manifest td:last-child { white-space: nowrap; }
 
 .slots { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .slot {
@@ -233,6 +262,20 @@ table.manifest td.name { font-weight: 600; }
 .tick .warn-text { color: #fbbf24; }
 .chips.picked li { border-color: var(--accent-soft); background: var(--ok-bg); color: #d1fae5; }
 
+/* The fields the seller copies into the listing form, and the price they type. */
+.preview-text { margin: 0; font-size: 14.5px; line-height: 1.55; white-space: pre-wrap; }
+.chips li.over { border-color: var(--warn-line); background: var(--warn-bg); color: #fbbf24; }
+.pairs { margin: 10px 0 0; display: grid; gap: 6px; }
+.pairs > div { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 10px; }
+.pairs dt { font-size: 13px; font-weight: 600; color: var(--muted); }
+.pairs dd { margin: 0; font-size: 14px; }
+@media (max-width: 720px) { .pairs > div { grid-template-columns: minmax(0, 1fr); } }
+.price-field input { max-width: 160px; }
+
+/* Etsy's own required questions, asked before a draft is saved. */
+.etsy-fields { display: grid; grid-template-columns: minmax(0, 1.6fr) 160px minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 900px) { .etsy-fields { grid-template-columns: minmax(0, 1fr); } }
+
 .score { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
 .score small { font-size: 13px; color: var(--muted); font-weight: 600; }
 .score.ok { color: var(--accent); }
@@ -254,3 +297,79 @@ table.manifest td.name { font-weight: 600; }
 .drop > .row { margin-bottom: 14px; }
 .drop .score-items { margin: 0 14px 14px; }
 .drop-meta { color: var(--muted); font-size: 12.5px; font-weight: 500; font-style: normal; }
+
+/* The simple screen: one name box, one ZIP box, one folded Advanced panel. */
+.zipdrop {
+  border: 1px dashed var(--line); border-radius: var(--radius-sm); background: rgba(4, 8, 11, 0.55);
+  padding: 28px 18px; text-align: center; cursor: pointer; transition: border-color 0.18s, background 0.18s;
+}
+.zipdrop:hover, .zipdrop.over { border-color: var(--accent-glow); background: var(--accent-soft); }
+.zipdrop p { margin: 0; font-size: 14px; }
+
+/* The ZIP's images, mapped onto the slots before anything is uploaded. */
+.staged { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.staged-row {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: 10px; align-items: center; padding: 9px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--glass);
+}
+.staged-row.ok { border-color: var(--ok-line); background: var(--ok-bg); }
+.staged-row.fail { border-color: var(--err-line); background: var(--err-bg); }
+.staged-name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.staged-slot { width: auto; padding: 8px 10px; font-size: 13px; }
+.staged-state { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.staged-row.ok .staged-state { color: #d1fae5; }
+.staged-row.fail .staged-state { color: #fda4af; }
+@media (max-width: 900px) {
+  .staged-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .staged-slot { grid-column: 1 / -1; width: 100%; }
+  .staged-state { grid-column: 1 / -1; }
+}
+
+.advanced { background: var(--card); margin-bottom: 16px; }
+.advanced > summary { font-size: 15px; }
+.advanced h3 { margin: 22px 0 0; font-size: 14.5px; font-weight: 700; }
+.advanced > .field { margin-bottom: 22px; }
+/* The settings sections live inside the panel, so they drop their own card chrome. */
+.advanced .card {
+  background: none; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none;
+  padding: 0; margin: 16px 0 0;
+}
+.advanced .card + .card { border-top: 1px solid var(--line); padding-top: 18px; }
+
+/* Legal pages shown in place of the sign-in card, with the links under it. */
+.legal-links { justify-content: center; }
+.legal p { margin: 10px 0; }
+.legal h3 { margin: 20px 0 0; font-size: 15px; font-weight: 700; }
+.legal-section + .legal-section { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 4px; }
+
+/* App footer: trademark line above the legal links and contact email. */
+.app-footer { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 24px 0 8px; }
+.trademark-note { text-align: center; margin: 0; }
+.trademark-note.center { text-align: center; }
+
+/* The crop/compress offer under a refused ZIP image, across its whole row. */
+.staged-fix { grid-column: 1 / -1; justify-content: flex-end; }
+
+/* Editing the listing fields before the PDFs are built. */
+.card > .head { justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.card > .head h2 { margin: 0; }
+.tag-editor, .desc-editor {
+  width: 100%; font: inherit; font-size: 14px; color: var(--ink);
+  background: var(--bg-deep); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 9px 11px; resize: vertical; line-height: 1.5;
+}
+.tag-editor:focus, .desc-editor:focus { outline: none; border-color: var(--accent-soft); }
+.check-list { list-style: none; margin: 4px 0 12px; padding: 0; display: grid; gap: 5px; }
+.check-list li { color: #fbbf24; font-size: 13px; border-left: 3px solid var(--warn-line); padding-left: 10px; }
+
+/* Phones: ease the padding, headline and card chrome so nothing crowds. */
+@media (max-width: 640px) {
+  .app { padding: 20px 14px 56px; }
+  .topbar { margin-bottom: 18px; }
+  .topbar h1 { font-size: 24px; }
+  .subtitle { font-size: 12.5px; }
+  nav { justify-content: flex-start; }
+  .card { padding: 16px; border-radius: var(--radius-sm); }
+  .table-scroll table.manifest { min-width: 480px; }
+}

@@ -2,19 +2,24 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, waitForText } from './api.js';
 import { modelLabel, providerLabel } from './labels.js';
 import ProductForm from './components/ProductForm.jsx';
+import ZipDrop from './components/ZipDrop.jsx';
+import AdvancedPanel from './components/AdvancedPanel.jsx';
 import Workspace from './components/Workspace.jsx';
 import HistoryView from './components/HistoryView.jsx';
-import SettingsView from './components/SettingsView.jsx';
+import BulkView from './components/BulkView.jsx';
+import AdminView from './components/AdminView.jsx';
+import EtsyPanel from './components/EtsyPanel.jsx';
 import Login from './components/Login.jsx';
+import LegalView from './components/LegalView.jsx';
 
-// Anything here means the fix is a fresh API key, so offer the Settings panel.
+// Anything here means the fix is a fresh API key, so offer the Advanced panel.
 const KEY_PROBLEM = /quota|rate limit|429|api key|insufficient|billing/i;
 const QUOTA_PROBLEM = /quota|429|rate limit|no free requests/i;
 
 /** What to click next, given who wrote the guide. */
 function rewriteHint(quality) {
-  if (quality.provider && quality.provider !== 'gemini') return ', or pick a Gemini model in Settings so Gemini writes the guide';
-  if (/lite/i.test(quality.model || '')) return ', or choose a full-size model in Settings';
+  if (quality.provider && quality.provider !== 'gemini') return ', or pick a Gemini model under Advanced Settings so Gemini writes the guide';
+  if (/lite/i.test(quality.model || '')) return ', or choose a full-size model under Advanced Settings';
   return '';
 }
 
@@ -26,8 +31,17 @@ export default function App() {
   const [notice, setNotice] = useState(null);
   const [health, setHealth] = useState(null);
   const [settings, setSettings] = useState(null);
+  const [prompts, setPrompts] = useState(null);
   const [history, setHistory] = useState([]);
   const [session, setSession] = useState(null);
+  const [productName, setProductName] = useState('');
+  const [productType, setProductType] = useState('general');
+  const [picked, setPicked] = useState([]);
+  const [slots, setSlots] = useState([]);
+  const [staged, setStaged] = useState([]);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [etsy, setEtsy] = useState(null);
+  const [legal, setLegal] = useState(null);
 
   const loadHealth = useCallback(() => {
     api.health().then(setHealth).catch(() => setHealth(null));
@@ -63,9 +77,81 @@ export default function App() {
     }
   }, []);
 
+  const refreshPrompts = useCallback(async () => {
+    try {
+      const data = await api.prompts();
+      setPrompts(data.types);
+    } catch {
+      setPrompts(null);
+    }
+  }, []);
+
+  // Read once after sign-in so the closed Advanced summary can name the model,
+  // then again whenever the panel opens.
   useEffect(() => {
-    if (view === 'settings') refreshSettings();
-  }, [view, refreshSettings]);
+    if (session?.signedIn) refreshSettings();
+  }, [session, refreshSettings]);
+
+  // The editable listing briefs are only needed inside the Advanced panel, so
+  // they load when it opens rather than on every page.
+  useEffect(() => {
+    if (session?.signedIn && advancedOpen) refreshPrompts();
+  }, [session, advancedOpen, refreshPrompts]);
+
+  // The ZIP box maps files onto slots before any product exists, so the slot
+  // names and their rules come from the server on their own.
+  useEffect(() => {
+    if (!session?.signedIn || slots.length) return;
+    api.slots().then((data) => setSlots(data.slots)).catch(catch401);
+  }, [session, slots.length]);
+
+  useEffect(() => {
+    if (advancedOpen) refreshSettings();
+  }, [advancedOpen, refreshSettings]);
+
+  // Whether Etsy is switched on at all is a server answer, so the panel cannot
+  // exist before it. A build without the flag simply says "off" and nothing
+  // Etsy-shaped is rendered.
+  const refreshEtsy = useCallback(async () => {
+    try {
+      setEtsy(await api.etsyStatus());
+    } catch {
+      setEtsy(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (session?.signedIn) refreshEtsy();
+  }, [session, refreshEtsy]);
+
+  // An account verification link (/verify?token=…) is meant to be clicked from
+  // email. Confirm it here, then drop the token from the address bar. A reset
+  // link (/reset) is handled by the sign-in screen, so it is left alone.
+  useEffect(() => {
+    if (!window.location.pathname.startsWith('/verify')) return;
+    const token = new URLSearchParams(window.location.search).get('token');
+    window.history.replaceState({}, '', window.location.pathname);
+    if (!token) return;
+    api
+      .verifyAccount(token)
+      .then(() => setNotice('Email confirmed. Your account is fully set up.'))
+      .catch((err) => setError(err));
+  }, []);
+
+  // Etsy brings the browser back to the studio with the outcome in the address
+  // bar. The words there are safe to show — a token never travels this way.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('etsy');
+    if (!result) return;
+    window.history.replaceState({}, '', window.location.pathname);
+    if (result === 'connected') {
+      setNotice('Etsy shop connected. It will be used for drafts only.');
+      refreshEtsy();
+    } else {
+      setError(new Error(params.get('message') || 'Etsy could not be connected.'));
+    }
+  }, [refreshEtsy]);
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -133,6 +219,8 @@ export default function App() {
       const product = await waitForText(id);
       setProduct(product);
       setNotice(textNotice(product, label === 'Rewriting the listing text'));
+      // A generation was charged to today's count, so refresh what is left.
+      refreshAuth();
       return product;
     } catch (err) {
       catch401(err);
@@ -142,11 +230,11 @@ export default function App() {
     }
   }
 
-  async function handleCreate(productName, keywords) {
+  async function handleCreate() {
     await generateText(
-      'Writing your listing package',
-      'The text model is generating File 1, File 2 and 7 image prompts. This takes about 30-60 seconds.',
-      () => api.create(productName, keywords),
+      'Generating your listing package',
+      'The text model is writing File 1, File 2 and 7 image prompts. This takes about 30-60 seconds.',
+      () => api.create(productName.trim(), picked, productType === 'general' ? null : productType),
     );
   }
 
@@ -166,7 +254,203 @@ export default function App() {
       setProduct(data.product);
       const size = (data.zip.bytes / 1024 / 1024).toFixed(2);
       const images = data.zip.images ?? 0;
-      setNotice(`${data.zip.name} is ready: 2 PDFs and ${images} image${images === 1 ? '' : 's'} (${size} MB).`);
+      const pdfs = data.zip.documents ?? 0;
+      setNotice(`${data.zip.name} is ready: ${pdfs} PDF${pdfs === 1 ? '' : 's'} and ${images} image${images === 1 ? '' : 's'} (${size} MB).`);
+    }
+  }
+
+  async function handleSaveListing(fields) {
+    const data = await run('Saving your wording', 'Rewriting the listing text and reprinting its PDF.', () =>
+      api.saveListing(product.id, fields),
+    );
+    if (data) {
+      setProduct(data.product);
+      setNotice('Your wording is saved and the SEO PDF was reprinted with it.');
+    }
+    return data;
+  }
+
+  async function handleSavePrice(price) {
+    const data = await run('Saving price', null, () => api.savePrice(product.id, price));
+    if (data) {
+      setProduct(data.product);
+      setNotice(data.product.price ? `Price set to ${data.product.price}.` : 'Price cleared.');
+    }
+  }
+
+  /** A cropped or compressed file takes the place of the one it was made from. */
+  function handleReplaceStaged(key, file) {
+    setStaged((current) =>
+      current.map((item) =>
+        item.key === key ? { ...item, file, name: file.name, bytes: file.size, status: '', message: '' } : item,
+      ),
+    );
+  }
+
+  /** Files straight out of the ZIP, in file-name order, one per slot. */
+  async function handleImages(images) {
+    let list = slots;
+    if (!list.length) {
+      const data = await api.slots();
+      list = data.slots;
+      setSlots(list);
+    }
+    setStaged(
+      images.map((image, index) => ({
+        key: `${image.name}-${index}`,
+        name: image.name,
+        bytes: image.file.size,
+        file: image.file,
+        slotId: list[index].id,
+        status: '',
+        message: '',
+      })),
+    );
+  }
+
+  /** Choosing an occupied slot swaps the two images; nothing is dropped. */
+  function handleAssign(key, slotId) {
+    setStaged((current) => {
+      const moving = current.find((item) => item.key === key);
+      if (!moving || moving.slotId === slotId) return current;
+      const displaced = current.find((item) => item.slotId === slotId);
+      return current.map((item) => {
+        if (item.key === key) return { ...item, slotId, status: '', message: '' };
+        if (displaced && item.key === displaced.key) {
+          return { ...item, slotId: moving.slotId, status: '', message: '' };
+        }
+        return item;
+      });
+    });
+  }
+
+  function handleRemoveStaged(key) {
+    setStaged((current) => current.filter((item) => item.key !== key));
+  }
+
+  function handleClearStaged() {
+    setStaged([]);
+  }
+
+  /**
+   * Uploads the mapped files one slot at a time through the existing route, so
+   * the server's 4:3 and minimum-width rules decide every result.
+   */
+  async function handleFillSlots() {
+    if (!product) {
+      setError(new Error('Write the listing text first — these images go into its slots.'));
+      return;
+    }
+    setBusy({ label: 'Checking your images', note: 'Each one has to be 4:3 and at least 2000px wide.' });
+    setError(null);
+    setNotice(null);
+    const results = [];
+    let latest = product;
+    try {
+      for (const item of staged) {
+        try {
+          const data = await api.uploadImage(product.id, item.slotId, item.file);
+          latest = data.product;
+          results.push({ ...item, status: 'ok', message: `${data.image.width} × ${data.image.height}px` });
+        } catch (err) {
+          if (err.status === 401) {
+            catch401(err);
+            results.push(...staged.slice(results.length).map((rest) => ({ ...rest, status: '', message: '' })));
+            break;
+          }
+          results.push({ ...item, status: 'fail', message: err.message });
+        }
+      }
+      setProduct(latest);
+      setStaged(results);
+      const refused = results.filter((item) => item.status === 'fail');
+      if (!refused.length) {
+        setNotice(`${results.length} image${results.length === 1 ? '' : 's'} filled their slots. Build the ZIP again to pack them in.`);
+      } else {
+        setError(
+          new Error(
+            `${results.length - refused.length} of ${results.length} images accepted. Refused: ${refused
+              .map((item) => `${item.name} — ${item.message}`)
+              .join(' | ')}`,
+          ),
+        );
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Your own PDF stands in for the one the portal would print for that file. */
+  async function handleUploadPdf(document, file) {
+    const data = await run(
+      'Checking your PDF',
+      `${document.name} has to be a real PDF, and under the size this host accepts.`,
+      () => api.uploadDocument(product.id, document.key, file),
+    );
+    if (data) {
+      setProduct(data.product);
+      setNotice(`Your PDF now stands in for ${document.name}. Build the ZIP again to pack it in.`);
+    }
+  }
+
+  async function handleRestorePdf(document) {
+    const data = await run('Restoring the portal PDF', null, () => api.removeDocument(product.id, document.key));
+    if (data) {
+      setProduct(data.product);
+      setNotice(`${document.name} will be printed from the listing text again.`);
+    }
+  }
+
+  /** Etsy owns the sign-in page, so the browser goes there whole. That keeps the
+   *  sign-in cookie on the navigation and the callback arrives authenticated. */
+  async function handleEtsyConnect() {
+    const data = await run('Opening Etsy', 'Etsy will ask you to sign in and allow the listings permission.', () =>
+      api.etsyConnect(),
+    );
+    if (data?.url) window.location.assign(data.url);
+  }
+
+  async function handleEtsyDraft(fields) {
+    const data = await run(
+      'Saving your draft in Etsy',
+      'Creating the listing, then attaching your images and both PDFs. It is saved as a draft, not published.',
+      () => api.etsyDraft(product.id, fields),
+    );
+    if (!data) return;
+    setProduct(data.product);
+    const { draft } = data;
+    setNotice(
+      `Draft saved in Etsy: ${draft.images} image${draft.images === 1 ? '' : 's'} and ${draft.files} file${draft.files === 1 ? '' : 's'} attached. `
+        + `${draft.url ?? `listing ${draft.listingId}`} — review it there, or use Publish to make it live.`,
+    );
+  }
+
+  // Publishing makes a real listing visible on the shop and available to buyers,
+  // so it only ever happens from an explicit click the seller confirms.
+  async function handleEtsyPublish() {
+    if (!window.confirm('Publish this listing on Etsy? It goes live on your shop and buyers can see and purchase it.')) {
+      return false;
+    }
+    const data = await run('Publishing on Etsy', 'Making your saved draft live on your shop.', () =>
+      api.etsyPublish(product.id),
+    );
+    if (!data) return false;
+    setProduct(data.product);
+    const { published } = data;
+    setNotice(
+      `Listing is now ${published.state === 'active' ? 'live' : published.state} on Etsy: ${
+        published.url ?? `listing ${published.listingId}`
+      }. Manage it there whenever you like.`,
+    );
+    return true;
+  }
+
+  async function handleEtsyDisconnect() {
+    if (!window.confirm('Disconnect this Etsy shop? Your listings and files on Etsy are not touched.')) return;
+    const data = await run('Disconnecting', null, () => api.etsyDisconnect());
+    if (data) {
+      setEtsy({ ...data, whoMade: etsy?.whoMade, whenMade: etsy?.whenMade });
+      setNotice('Etsy shop disconnected.');
     }
   }
 
@@ -190,16 +474,38 @@ export default function App() {
     }
   }
 
+  async function handleGenerateImage(slot) {
+    const data = await run(
+      'Drawing this image',
+      `Generating ${slot.label}. This can take a minute.`,
+      () => api.generateImage(product.id, slot.id),
+    );
+    if (data) {
+      setProduct(data.product);
+      setNotice(
+        `${slot.label} drawn (${data.image.width} × ${data.image.height}px). Create the ZIP again to pack it in.`,
+      );
+    }
+  }
+
   function openFromHistory(id) {
     setView('studio');
     run('Loading product', null, async () => {
       const data = await api.get(id);
       setProduct(data.product);
+      setProductName(data.product.productName || '');
+      setProductType(data.product.productType || 'general');
+      setPicked(data.product.keywords || []);
+      setStaged([]);
     });
   }
 
   function startOver() {
     setProduct(null);
+    setProductName('');
+    setProductType('general');
+    setPicked([]);
+    setStaged([]);
     setError(null);
     setNotice(null);
   }
@@ -253,6 +559,39 @@ export default function App() {
     }
   }
 
+  async function handleSaveTheme(theme) {
+    const data = await run('Saving colours', null, () => api.saveTheme(theme));
+    if (data) {
+      setSettings((prev) => ({ ...prev, theme: data.theme }));
+      setNotice('Your PDF colours are saved and will print on the next listing.');
+    }
+  }
+
+  async function handleRemoveTheme() {
+    const data = await run('Resetting colours', null, () => api.removeTheme());
+    if (data) {
+      setSettings((prev) => ({ ...prev, theme: data.theme }));
+      setNotice('The PDFs will print in the built-in palette again.');
+    }
+  }
+
+  async function handleSavePrompt(type, body) {
+    const data = await run('Saving prompt', null, () => api.savePrompt(type, body));
+    if (data) {
+      setPrompts(data.types);
+      setNotice('That listing brief will be used for the next listing of its type.');
+    }
+    return data;
+  }
+
+  async function handleRemovePrompt(type) {
+    const data = await run('Reverting prompt', null, () => api.removePrompt(type));
+    if (data) {
+      setPrompts(data.types);
+      setNotice('That type is back to the built-in brief.');
+    }
+  }
+
   async function handleChangePassword(current, next) {    const data = await run('Saving password', null, () => api.savePassword(next, current));
     if (data) {
       setSettings(data);
@@ -261,7 +600,11 @@ export default function App() {
   }
 
   async function signOut() {
-    await run('Signing out', null, () => api.logout());
+    await run('Signing out', null, async () => {
+      // Clear whichever session this browser holds; both are public and no-op
+      // when the other cookie is the one in use.
+      await Promise.allSettled([api.accountSignOut(), api.logout()]);
+    });
     refreshAuth();
     setProduct(null);
   }
@@ -269,7 +612,11 @@ export default function App() {
   // The whole portal is behind the password, so nothing else is fetched until
   // the session is confirmed.
   if (!session) return <div className="app"><main><p className="muted">Checking your sign-in…</p></main></div>;
-  if (!session.signedIn) return <Login status={session} onSignedIn={refreshAuth} />;
+  // A reset link opens the sign-in screen's password form even on an unlocked
+  // build — an email can land on a still-logged-in browser, and the link is
+  // what the person clicked; the studio would swallow it.
+  const onResetLink = window.location.pathname.startsWith('/reset');
+  if (!session.signedIn || onResetLink) return <Login status={session} onSignedIn={refreshAuth} />;
 
   // The short-guide warning travels with the product, so it survives a reload.
   const quality = view === 'studio' && product ? product.warnings?.quality : null;
@@ -278,7 +625,7 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div>
-          <h1>Etsy Digital Listing Generator</h1>
+          <h1>Listora</h1>
           <p className="subtitle">Listing text, image prompts and a ready-to-upload ZIP of PDFs.</p>
         </div>
         <nav>
@@ -288,16 +635,26 @@ export default function App() {
           <button className={view === 'history' ? 'nav active' : 'nav'} onClick={() => setView('history')}>
             History
           </button>
-          <button
-            className={view === 'settings' ? 'nav active' : 'nav'}
-            onClick={() => {
-              setView('settings');
-              refreshSettings();
-            }}
-          >
-            Settings
+          <button className={view === 'bulk' ? 'nav active' : 'nav'} onClick={() => setView('bulk')}>
+            Bulk
           </button>
-          {session.protected && (
+          {session.account?.role === 'admin' && (
+            <button className={view === 'admin' ? 'nav active' : 'nav'} onClick={() => setView('admin')}>
+              Admin
+            </button>
+          )}
+          {session.account && (
+            <span className="nav who" title={session.account.email}>
+              {session.account.name || session.account.email}
+              {session.account.role === 'admin' ? ' (owner)' : ''}
+            </span>
+          )}
+          {session.usage && !session.usage.exempt && (
+            <span className="nav who" title={`Resets at midnight UTC`}>
+              {session.usage.remaining} of {session.usage.limit} left today
+            </span>
+          )}
+          {(session.protected || session.account) && (
             <button className="nav" onClick={signOut} disabled={Boolean(busy)}>
               Sign out
             </button>
@@ -305,10 +662,10 @@ export default function App() {
         </nav>
       </header>
 
-      {health && health.missingProviders?.length > 0 && view !== 'settings' && (
+      {health && health.missingProviders?.length > 0 && !advancedOpen && (
         <div className="banner warn">
-          <strong>No API key for {health.missingProviders.map(providerLabel).join(' or ')}.</strong> Open Settings and paste a key
-          under Access keys to start generating again.
+          <strong>No API key for {health.missingProviders.map(providerLabel).join(' or ')}.</strong> Open Advanced
+          Settings and paste a key under Access keys to start generating again.
         </div>
       )}
 
@@ -323,8 +680,8 @@ export default function App() {
             </ul>
           )}
           <button className="linklike" onClick={() => setError(null)}>Dismiss</button>
-          {KEY_PROBLEM.test(error.message) && view !== 'settings' && (
-            <button className="linklike" onClick={() => setView('settings')}>
+          {KEY_PROBLEM.test(error.message) && !advancedOpen && (
+            <button className="linklike" onClick={() => setAdvancedOpen(true)}>
               {QUOTA_PROBLEM.test(error.message) ? 'Switch model or update key' : 'Update API key'}
             </button>
           )}
@@ -366,16 +723,8 @@ export default function App() {
       )}
 
       <main>
-        {view === 'settings' ? (
-          <SettingsView
-            settings={settings}
-            busy={busy}
-            onSave={handleSaveKey}
-            onRemove={handleRemoveKey}
-            onSaveModel={handleSaveModel}
-            onSaveBrand={handleSaveBrand}
-            onChangePassword={handleChangePassword}
-          />
+        {legal ? (
+          <LegalView doc={legal} onBack={() => setLegal(null)} contactEmail={session?.contactEmail} />
         ) : view === 'history' ? (
           <HistoryView
             products={history}
@@ -385,18 +734,103 @@ export default function App() {
             onClear={handleClearHistory}
             busy={busy}
           />
-        ) : product ? (
-          <Workspace
-            product={product}
-            busy={busy}
-            onRegenerateText={handleRegenerateText}
-            onPackage={handlePackage}
-            onUploadImage={handleUploadImage}
-            onRemoveImage={handleRemoveImage}
-            onStartOver={startOver}
-          />
+        ) : view === 'bulk' ? (
+          <BulkView onNotice={setNotice} onOpenProduct={openFromHistory} />
+        ) : view === 'admin' ? (
+          <AdminView />
         ) : (
-          <ProductForm busy={busy} onCreate={handleCreate} />
+          <div className="stack">
+            {product ? (
+              <Workspace
+                product={product}
+                busy={busy}
+                onRegenerateText={handleRegenerateText}
+                onPackage={handlePackage}
+                onSavePrice={handleSavePrice}
+                onSaveListing={handleSaveListing}
+                onUploadPdf={handleUploadPdf}
+                onRestorePdf={handleRestorePdf}
+                onUploadImage={handleUploadImage}
+                onRemoveImage={handleRemoveImage}
+                onGenerateImage={handleGenerateImage}
+                onStartOver={startOver}
+              />
+            ) : (
+              <ProductForm
+                busy={busy}
+                productName={productName}
+                onProductName={setProductName}
+                productTypes={settings?.productTypes}
+                productType={productType}
+                onProductType={setProductType}
+                onCreate={handleCreate}
+              />
+            )}
+
+            <ZipDrop
+              slots={slots}
+              staged={staged}
+              busy={busy}
+              rules={product?.rules}
+              onImages={handleImages}
+              onAssign={handleAssign}
+              onRemove={handleRemoveStaged}
+              onFill={handleFillSlots}
+              onClear={handleClearStaged}
+              onReplaceFile={handleReplaceStaged}
+            />
+
+            {etsy?.enabled && product && (
+              <EtsyPanel
+                key={product.id}
+                product={product}
+                status={etsy}
+                busy={busy}
+                onConnect={handleEtsyConnect}
+                onDraft={handleEtsyDraft}
+                onPublish={handleEtsyPublish}
+                onDisconnect={handleEtsyDisconnect}
+                onError={catch401}
+              />
+            )}
+
+            <AdvancedPanel
+              open={advancedOpen}
+              onToggle={setAdvancedOpen}
+              productName={productName}
+              busy={busy}
+              picked={picked}
+              onPicked={setPicked}
+              settings={settings}
+              prompts={prompts}
+              canManagePrompts={!session.account || session.account.role === 'admin'}
+              onSaveKey={handleSaveKey}
+              onRemoveKey={handleRemoveKey}
+              onSaveModel={handleSaveModel}
+              onSaveBrand={handleSaveBrand}
+              onSaveTheme={handleSaveTheme}
+              onRemoveTheme={handleRemoveTheme}
+              onSavePrompt={handleSavePrompt}
+              onRemovePrompt={handleRemovePrompt}
+              onChangePassword={handleChangePassword}
+            />
+          </div>
+        )}
+
+        {!legal && (
+          <footer className="app-footer">
+            <p className="trademark-note small muted">
+              The term "Etsy" is a trademark of Etsy, Inc. This application uses the Etsy API but is not
+              endorsed or certified by Etsy, Inc.
+            </p>
+            <div className="row legal-links">
+              <button className="linklike" onClick={() => setLegal('terms')}>Terms of Service</button>
+              <button className="linklike" onClick={() => setLegal('privacy')}>Privacy Policy</button>
+              {session?.contactEmail && (
+                <a className="linklike" href={`mailto:${session.contactEmail}`}>{session.contactEmail}</a>
+              )}
+            </div>
+          </footer>
         )}
       </main>
     </div>

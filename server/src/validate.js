@@ -306,6 +306,10 @@ const SEO_TITLE_MAX = 140;
 const SEO_TAG_MAX = 20;
 const SEO_TAG_COUNT = 13;
 
+// Exported so the seller's own editor checks against the same numbers the
+// pipeline repairs with, instead of a second copy that can drift.
+export const SEO_LIMITS = { titleMax: SEO_TITLE_MAX, tagMax: SEO_TAG_MAX, tagCount: SEO_TAG_COUNT };
+
 /** Marketplace limits from the brief: title length, tag count and tag length. */
 export function seoIssues(shape) {
   const issues = [];
@@ -442,7 +446,7 @@ function isTagLine(line) {
   return items.length >= 2 && items.every((item) => item.trim().length <= SEO_TAG_MAX + 5);
 }
 
-function rewriteTagSection(text, tags) {
+export function rewriteTagSection(text, tags) {
   const lines = String(text ?? '').split('\n');
   const head = lines.findIndex(isTagLine);
   if (head < 0) return text;

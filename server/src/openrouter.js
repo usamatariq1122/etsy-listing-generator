@@ -59,7 +59,7 @@ export async function callOpenRouterText(productName, brand, keywords, modelOver
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
-          'X-Title': 'Etsy Digital Listing Generator',
+          'X-Title': 'Listora',
         },
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         body: JSON.stringify({

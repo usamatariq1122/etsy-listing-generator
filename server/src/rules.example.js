@@ -19,3 +19,10 @@ export const IMAGE_RULES = {
   minWidth: 2000,
   maxBytes: 25 * 1024 * 1024,
 };
+
+// An uploaded PDF replaces one of the generated ones. The header and trailer are
+// checked, not the extension, and a hosted deployment caps it lower than this
+// because one serverless request cannot carry more than about 4 MB.
+export const PDF_RULES = {
+  maxBytes: 25 * 1024 * 1024,
+};

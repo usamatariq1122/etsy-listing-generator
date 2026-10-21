@@ -1,7 +1,9 @@
 import { isSafeId } from '../../src/paths.js';
 import { getProduct, initDb, updateProduct } from '../../src/db.js';
 import { runGeneration } from '../../src/generate.js';
-import { portalLocked, readSession, validSession } from '../../src/auth.js';
+import { resolveUserFromCookie } from '../../src/api.js';
+import { reportError } from '../../src/sentry.js';
+import { portalLocked } from '../../src/auth.js';
 
 // Writing a listing takes 30-60 seconds, longer than a normal invocation may
 // run. A background function gets the browser out of the wait: it answers 202
@@ -19,8 +21,9 @@ export default async (request) => {
 
   // A background invocation cannot answer the caller, so an unauthenticated one
   // is refused by failing the product instead: the polling browser reports the
-  // reason and nobody can spend your quota on a listing they cannot see.
-  const signedIn = !(await portalLocked()) || (await validSession(readSession(request.headers.get('cookie'))));
+  // reason and nobody can spend your quota on a listing they cannot see. An
+  // account session or the legacy portal password both count as signed in.
+  const signedIn = !(await portalLocked()) || Boolean(await resolveUserFromCookie(request.headers.get('cookie')));
   if (!signedIn) {
     const product = await getProduct(id);
     if (product && product.status !== 'failed') {
@@ -36,6 +39,7 @@ export default async (request) => {
     await runGeneration(id);
   } catch (error) {
     console.error('[run]', error);
+    if ((error.status || 500) >= 500) await reportError(error, { source: 'background-run' });
   }
 };
 

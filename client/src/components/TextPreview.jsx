@@ -1,6 +1,6 @@
 const TEXT_FILES = [
   { key: 'file1_text', name: 'product-content.pdf', title: 'File 1 — Product / pattern guide', field: 'file1Text' },
-  { key: 'file2_text', name: 'etsy-listing-seo.pdf', title: 'File 2 — SEO title, tags, description, checklist, video idea', field: 'file2Text' },
+  { key: 'file2_text', name: 'listing-seo-package.pdf', title: 'File 2 — SEO title, tags, description, checklist, video idea', field: 'file2Text' },
 ];
 
 const PROMPT_GROUPS = [

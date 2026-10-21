@@ -32,50 +32,52 @@ export default function HistoryView({ products, onOpen, onRefresh, onDelete, onC
           Nothing here yet. Products appear after you generate your first listing package.
         </p>
       ) : (
-        <table className="manifest">
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Status</th>
-              <th>Created</th>
-              <th>ZIP</th>
-              <th />
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((row) => (
-              <tr key={row.id}>
-                <td className="name">{row.productName}</td>
-                <td>{statusLabel(row.status)}</td>
-                <td>{fmt(row.createdAt)}</td>
-                <td>
-                  {row.zipReady ? (
-                    <a className="download" href={row.downloadUrl} download>
-                      Download
-                    </a>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
-                </td>
-                <td>
-                  <button className="small" onClick={() => onOpen(row.id)} disabled={Boolean(busy)}>
-                    Open
-                  </button>
-                </td>
-                <td>
-                  <button
-                    className="danger small"
-                    onClick={() => onDelete(row.id)}
-                    disabled={Boolean(busy)}
-                  >
-                    Delete
-                  </button>
-                </td>
+        <div className="table-scroll">
+          <table className="manifest">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>ZIP</th>
+                <th />
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {products.map((row) => (
+                <tr key={row.id}>
+                  <td className="name">{row.productName}</td>
+                  <td>{statusLabel(row.status)}</td>
+                  <td>{fmt(row.createdAt)}</td>
+                  <td>
+                    {row.zipReady ? (
+                      <a className="download" href={row.downloadUrl} download>
+                        Download
+                      </a>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <button className="small" onClick={() => onOpen(row.id)} disabled={Boolean(busy)}>
+                      Open
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      className="danger small"
+                      onClick={() => onDelete(row.id)}
+                      disabled={Boolean(busy)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );

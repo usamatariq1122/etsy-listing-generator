@@ -1,5 +1,5 @@
-import { deleteSetting, getSetting, setSetting } from './db.js';
 import { decryptSecret, encryptSecret } from './secrets.js';
+import { readScoped, writeScoped, clearScoped } from './scopedSettings.js';
 import { config } from './config.js';
 import { brandName } from './brand.js';
 import { modelCatalog } from './modelCatalog.js';
@@ -52,7 +52,7 @@ export async function modelChoices(provider) {
 
 /** The model saved for one provider, otherwise its default. */
 export async function resolveModel(provider = activeProvider()) {
-  const saved = (await getSetting(modelSetting(provider)))?.trim() ?? '';
+  const saved = (await readScoped(modelSetting(provider))).value?.trim() ?? '';
   return saved || (await defaultModel(provider));
 }
 
@@ -61,9 +61,9 @@ export async function resolveModel(provider = activeProvider()) {
  * grouped dropdown wins; otherwise the older per-provider setting is honoured.
  */
 export async function selectedModel() {
-  const [provider, model] = ((await getSetting(SELECTION)) ?? '').split('|');
+  const [provider, model] = ((await readScoped(SELECTION)).value ?? '').split('|');
   if (provider && model && (await modelChoices(provider)).includes(model)) return { provider, model };
-  const gemini = (await getSetting(modelSetting('gemini')))?.trim() ?? '';
+  const gemini = (await readScoped(modelSetting('gemini'))).value?.trim() ?? '';
   if (gemini && (await modelChoices('gemini')).includes(gemini)) return { provider: 'gemini', model: gemini };
   return { provider: 'gemini', model: await defaultModel('gemini') };
 }
@@ -81,13 +81,13 @@ export async function saveModel(provider, model) {
     err.status = 400;
     throw err;
   }
-  await setSetting(SELECTION, `${provider}|${value}`);
+  await writeScoped(SELECTION, `${provider}|${value}`);
   return keyStatus();
 }
 
 export async function removeModel(provider) {
-  await deleteSetting(SELECTION);
-  await deleteSetting(modelSetting(provider));
+  await clearScoped(SELECTION);
+  await clearScoped(modelSetting(provider));
   return keyStatus();
 }
 
@@ -95,13 +95,17 @@ const mask = (key) => (key.length <= 8 ? '****' : `****${key.slice(-4)}`);
 
 /**
  * Reads the key at call time so a key saved through the app takes effect on the
- * very next request, without restarting the backend.
+ * very next request, without restarting the backend. An account's own saved key
+ * wins; otherwise the shared one this portal used before accounts; otherwise the
+ * server's environment.
  */
 export async function resolveKey(provider = activeProvider()) {
-  const saved = (decryptSecret(await getSetting(settingKey(provider))) ?? '').trim();
+  const { value, scope } = await readScoped(settingKey(provider));
+  const saved = (decryptSecret(value) ?? '').trim();
   const fromEnv = (envKey(provider) ?? '').trim();
   const key = saved || fromEnv;
-  return { provider, key, source: saved ? 'app' : unusable(fromEnv) ? null : 'env' };
+  const source = saved ? scope : unusable(fromEnv) ? null : 'env';
+  return { provider, key, source };
 }
 
 /** Whether a provider can be called at all, without throwing. */
@@ -148,12 +152,12 @@ export function keyIssues(provider, raw) {
 }
 
 export async function saveKey(provider, raw) {
-  await setSetting(settingKey(provider), encryptSecret(String(raw).trim()));
+  await writeScoped(settingKey(provider), encryptSecret(String(raw).trim()));
   return keyStatus();
 }
 
 export async function removeKey(provider) {
-  await deleteSetting(settingKey(provider));
+  await clearScoped(settingKey(provider));
   return keyStatus();
 }
 

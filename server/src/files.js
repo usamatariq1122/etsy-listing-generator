@@ -56,20 +56,19 @@ export async function getFile(key) {
   }
 }
 
-export async function fileSize(key) {
+/** True when the key has been written and not deleted. */
+export async function fileExists(key) {
   if (onNetlify()) {
     const blobs = await store();
-    const meta = await blobs.getMetadata(key);
-    return meta?.etag ? meta.size ?? null : null;
+    return Boolean((await blobs.getMetadata(key))?.etag);
   }
   try {
-    return (await fs.stat(localFile(key))).size;
+    await fs.access(localFile(key));
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
-
-export const fileExists = async (key) => (await fileSize(key)) !== null;
 
 export async function deleteFile(key) {
   if (onNetlify()) {

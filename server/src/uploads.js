@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { checkImage } from './imageinfo.js';
-import { deleteFile, fileExists, getFile, listFiles, putFile } from './files.js';
+import { deleteFile, getFile, listFiles, putFile } from './files.js';
 import { imageKey, imagePrefix } from './paths.js';
 import { imageFileName } from './slots.js';
 import { deleteProductImage, getProductImage, saveProductImage } from './db.js';
@@ -48,11 +48,12 @@ export async function dropImage(product, slot) {
   return deleteProductImage(product.id, slot.id);
 }
 
-/** Resolves a stored image to its key, or null if the file is gone. */
+/** Resolves a stored image to its bytes, or null if the file is gone. */
 export async function resolveImage(productId, slotId) {
   const row = await getProductImage(productId, slotId);
   if (!row) return null;
   const key = imageKey(productId, row.file_name);
-  if (!(await fileExists(key))) return null;
-  return { key, row, bytes: await getFile(key) };
+  const bytes = await getFile(key);
+  if (!bytes) return null;
+  return { key, row, bytes };
 }

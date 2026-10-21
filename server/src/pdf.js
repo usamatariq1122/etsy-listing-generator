@@ -1,11 +1,14 @@
 import PDFDocument from 'pdfkit';
 
 // Print-friendly palette: one dark ink for titles, one accent for section
-// headings and rules, one muted grey for labels and footers.
-const INK = '#14293d';
-const ACCENT = '#2f6f8f';
-const MUTED = '#6b7280';
-const HAIRLINE = '#d7dee5';
+// headings and rules, one muted grey for labels and footers. A seller can
+// recolour all four through the `theme` argument; these stay the default.
+const PALETTE = {
+  ink: '#14293d',
+  accent: '#2f6f8f',
+  muted: '#6b7280',
+  hairline: '#d7dee5',
+};
 
 // pdfkit's built-in Helvetica is WinAnsi-encoded, so pictographs and dingbats
 // have no glyph and would render as garbage.
@@ -131,7 +134,13 @@ function credit(byline, subtitle) {
 }
 
 /** Lays out plain listing text as a justified A4 PDF and resolves with the bytes. */
-export function textToPdf(body, fallbackTitle, subtitle, { cover = false, brand = null } = {}) {
+export function textToPdf(body, fallbackTitle, subtitle, { cover = false, brand = null, theme = null } = {}) {
+  // A seller's palette over the built-in one. Shadowing the module constants here
+  // means the whole layout below is unchanged; it simply prints in these colours.
+  const INK = theme?.ink || PALETTE.ink;
+  const ACCENT = theme?.accent || PALETTE.accent;
+  const MUTED = theme?.muted || PALETTE.muted;
+  const HAIRLINE = theme?.hairline || PALETTE.hairline;
   return new Promise((resolve, reject) => {
     const found = cover ? takeCover(body) : { body, title: null, byline: null };
     const title = found.title || fallbackTitle;

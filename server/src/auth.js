@@ -1,6 +1,21 @@
 import crypto from 'node:crypto';
-import { getSetting, setSetting } from './db.js';
+import {
+  consumeVerification,
+  countUsers,
+  createSessionRow,
+  createUser,
+  deleteSessionRow,
+  deleteSessionsForUser,
+  getSessionUser,
+  getSetting,
+  getUserByEmail,
+  getUserById,
+  setSetting,
+  storeVerification,
+  updateUser,
+} from './db.js';
 import { config } from './config.js';
+import { emailProblem, mailReady, sendVerification } from './email.js';
 
 // One password, stored as a salted scrypt hash in the settings table, guards
 // every endpoint. The portal spends your model quota, so a hosted
@@ -155,4 +170,172 @@ export async function noteFailure() {
 
 export async function clearFailures() {
   await setSetting(LOCK, '');
+}
+
+// --- Named accounts (Phase 2) -------------------------------------------
+//
+// One shared password becomes many accounts, each owning its listings, settings
+// and files. Account sessions are opaque database rows under a separate cookie,
+// so the legacy portal-password gate below stays exactly as it was. The first
+// account to exist is the admin — and, on a deployed build with no portal
+// password yet, the way in — which is what keeps a fresh deployment reachable
+// without ever locking the owner out.
+
+const ACCOUNT_COOKIE = 'listora_account';
+const ACCOUNT_SESSION_DAYS = 30;
+const VERIFY_DAYS = 3;
+
+export const needsBootstrap = () => countUsers().then((n) => n === 0);
+
+export async function signUp({ email, password, name }) {
+  const problem = emailProblem(email);
+  if (problem) throw accountError(problem, 400);
+  const passwordIssue = passwordProblem(password);
+  if (passwordIssue) throw accountError(passwordIssue, 400);
+  const normalised = String(email).trim().toLowerCase();
+  if (await getUserByEmail(normalised)) throw accountError('That email already has an account. Sign in instead.', 409);
+  const id = crypto.randomUUID();
+  const role = (await countUsers()) === 0 ? 'admin' : 'user';
+  const user = await createUser({ id, email: normalised, name: String(name ?? '').trim() || null, passwordHash: await hashToStorage(password), role });
+  await issueVerification(id, 'verify');
+  const { token, expiresAt } = await createAccountSession(id);
+  return { user, token, expiresAt };
+}
+
+export async function signInAccount({ email, password }) {
+  const user = await getUserByEmail(String(email ?? '').trim().toLowerCase());
+  // The same reply whether the address is unknown or the password is wrong, so
+  // the screen cannot be used to list who has an account.
+  if (!user || !(await matchesPassword(password, user.password_hash))) {
+    throw accountError('Wrong email or password.', 401);
+  }
+  const { token, expiresAt } = await createAccountSession(user.id);
+  return { user, token, expiresAt };
+}
+
+export async function signOutAccount(token) {
+  const session = await getSessionUser(token);
+  if (session?.session_id) await deleteSessionRow(session.session_id);
+}
+
+export const resolveAccount = (token) => getSessionUser(token);
+
+export function readAccount(cookieHeader) {
+  if (!cookieHeader) return null;
+  for (const part of String(cookieHeader).split(';')) {
+    const [name, ...rest] = part.trim().split('=');
+    if (name === ACCOUNT_COOKIE) return decodeURIComponent(rest.join('='));
+  }
+  return null;
+}
+
+/** HttpOnly like the portal cookie; SameSite=Lax so it rides on the account's own
+ *  navigations (including the verification link) but not on cross-site posts. */
+export function accountCookie(token, maxAgeSeconds = ACCOUNT_SESSION_DAYS * 86400) {
+  return [
+    `${ACCOUNT_COOKIE}=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    config.deployed ? 'Secure' : null,
+    `Max-Age=${maxAgeSeconds}`,
+  ]
+    .filter(Boolean)
+    .join('; ');
+}
+
+export async function verifyAccountToken(token) {
+  if (!token) return false;
+  const record = await consumeVerification(sha256(token), 'verify');
+  if (!record) return false;
+  await updateUser(record.user_id, { verified_at: new Date().toISOString() });
+  return true;
+}
+
+/** Starts a password reset. The token is always minted, so the flow works even
+ *  where no mail is configured: on a local build the caller gets the token back
+ *  and can open the link directly. On a deployed build a token with no mailbox
+ *  to send it to is useless, so the caller only reports what the user was told —
+ *  and never receives a live reset token. An unknown address simply yields
+ *  nothing to send, and the caller answers the same either way. */
+export async function issueReset(email) {
+  const user = await getUserByEmail(String(email ?? '').trim().toLowerCase());
+  if (!user) return { sent: false, token: null };
+  const token = await mintVerification(user.id, 'reset');
+  if (mailReady()) {
+    await sendVerification(user.email, token, 'reset');
+    return { sent: true, token: null };
+  }
+  // No mailbox. A local build can hand the link straight to the person using it.
+  if (!config.deployed) return { sent: false, token };
+  return { sent: false, token: null };
+}
+
+/** Consumes a reset token and installs a new password. Needs the address the link
+ *  was sent to as well, so a leaked token alone is not enough to take a
+ *  password, and every old session is dropped once it is used. */
+export async function resetPassword({ email, token, password }) {
+  const user = await getUserByEmail(String(email ?? '').trim().toLowerCase());
+  if (!user) throw accountError('That reset link is no longer valid.', 400);
+  const problem = passwordProblem(password);
+  if (problem) throw accountError(problem, 400);
+  const record = await consumeVerification(sha256(token), 'reset');
+  if (!record || record.user_id !== user.id) throw accountError('That reset link is no longer valid.', 400);
+  await updateUser(user.id, { password_hash: await hashToStorage(password) });
+  await deleteSessionsForUser(user.id);
+  return true;
+}
+
+async function issueVerification(userId, kind) {
+  // With no mail configured there is nothing to deliver, so no token is minted
+  // and no row is left sitting undeliverable in the table.
+  if (!mailReady()) return null;
+  const token = await mintVerification(userId, kind);
+  const user = await getUserById(userId);
+  if (user) await sendVerification(user.email, token, kind);
+  return token;
+}
+
+/** Mints a single-use token, stores only its hash, and returns the plaintext for
+ *  delivery. Shared by the emailed verification and the local reset link. */
+async function mintVerification(userId, kind) {
+  const token = crypto.randomBytes(32).toString('hex');
+  await storeVerification({
+    id: crypto.randomUUID(),
+    userId,
+    kind,
+    tokenHash: sha256(token),
+    expiresAt: Date.now() + VERIFY_DAYS * 864e5,
+  });
+  return token;
+}
+
+function accountError(message, status) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+const sha256 = (value) => crypto.createHash('sha256').update(String(value)).digest('hex');
+
+async function hashToStorage(password) {
+  const cost = 2 ** 15;
+  const salt = crypto.randomBytes(16);
+  const digest = await hash(password, salt, cost);
+  return `scrypt$${cost}$${b64(salt)}$${b64(digest)}`;
+}
+
+async function matchesPassword(password, stored) {
+  if (!stored) return false;
+  const [, cost, salt, digest] = String(stored).split('$');
+  if (!salt || !digest) return false;
+  const candidate = await hash(password, Buffer.from(salt, 'base64url'), Number(cost));
+  return crypto.timingSafeEqual(candidate, Buffer.from(digest, 'base64url'));
+}
+
+async function createAccountSession(userId) {
+  const id = crypto.randomUUID();
+  const expiresAt = Date.now() + ACCOUNT_SESSION_DAYS * 864e5;
+  await createSessionRow({ id, userId, expiresAt });
+  return { token: id, expiresAt };
 }

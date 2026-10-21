@@ -1,10 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { providerLabel } from '../labels.js';
 
 const SOURCE = {
+  user: 'your own saved key',
+  shared: 'the portal\'s saved key',
   app: 'saved in this app',
   env: 'loaded from server/.env',
 };
+
+// A key the app stored (yours or the shared one) can be removed; an .env key can
+// only be shadowed by saving your own over it.
+const SAVED_SOURCES = ['user', 'shared', 'app'];
 
 function KeyRow({ provider, info, busy, onSave, onRemove }) {
   const [draft, setDraft] = useState('');
@@ -66,7 +72,7 @@ function KeyRow({ provider, info, busy, onSave, onRemove }) {
             <button type="button" onClick={close} disabled={Boolean(busy)}>
               Cancel
             </button>
-            {info.source === 'app' && (
+            {SAVED_SOURCES.includes(info.source) && (
               <button type="button" className="danger" onClick={() => onRemove(provider)} disabled={Boolean(busy)}>
                 Remove saved key
               </button>
@@ -128,7 +134,134 @@ function PasswordRow({ onChange, busy, configured }) {
   );
 }
 
-export default function SettingsView({ settings, busy, onSave, onRemove, onSaveModel, onSaveBrand, onChangePassword }) {
+function ThemeCard({ theme, busy, onSave, onRemove }) {
+  const DEFAULTS = { ink: '#14293d', accent: '#2f6f8f', muted: '#6b7280', hairline: '#d7dee5' };
+  const FIELDS = [
+    ['ink', 'Title colour'],
+    ['accent', 'Headings and rules'],
+    ['muted', 'Labels and footers'],
+    ['hairline', 'Thin separators'],
+  ];
+  const [draft, setDraft] = useState(theme || DEFAULTS);
+  const current = theme || DEFAULTS;
+  const dirty = FIELDS.some(([key]) => (draft[key] || '').toLowerCase() !== current[key]);
+
+  function submit(event) {
+    event.preventDefault();
+    onSave(FIELDS.reduce((acc, [key]) => ({ ...acc, [key]: draft[key] }), {}));
+  }
+
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>PDF colours</h2>
+        <span className="muted small">applies to the next PDF the portal prints</span>
+      </div>
+      <form onSubmit={submit} className="stack">
+        <div className="color-grid">
+          {FIELDS.map(([key, label]) => (
+            <label className="field" key={key}>
+              <span>{label}</span>
+              <input
+                type="color"
+                value={/^#[0-9a-fA-F]{6}$/.test(draft[key] || '') ? draft[key] : DEFAULTS[key]}
+                onChange={(e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }))}
+                disabled={Boolean(busy) || !onSave}
+              />
+            </label>
+          ))}
+        </div>
+        <div className="row">
+          <button type="submit" className="primary" disabled={Boolean(busy) || !dirty || !onSave}>
+            Save colours
+          </button>
+          <button type="button" onClick={() => onRemove()} disabled={Boolean(busy) || !onRemove || !dirty}>
+            Reset to default
+          </button>
+        </div>
+      </form>
+      <p className="muted small">
+        These four colours are the whole printed look of both PDFs. Left alone, the portal prints in its
+        built-in palette. Fonts and a logo are not editable here, because adding those would mean bundling
+        extra files into the server.
+      </p>
+    </section>
+  );
+}
+
+function PromptCard({ types, busy, onSave, onRemove }) {
+  const [value, setValue] = useState(types[0]?.value ?? 'general');
+  const current = types.find((type) => type.value === value) || types[0];
+  const [draft, setDraft] = useState(current?.body ?? '');
+
+  // Re-seed the editor whenever the selected type or its saved wording changes,
+  // so a refresh after saving shows the stored text rather than a stale draft.
+  useEffect(() => {
+    if (current) setDraft(current.body);
+  }, [current?.value, current?.body]);
+
+  if (!current) return null;
+  const dirty = draft !== current.body;
+
+  function submit(event) {
+    event.preventDefault();
+    onSave(current.value, draft);
+  }
+
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Listing prompts</h2>
+        <span className="muted small">the brief the text model writes from</span>
+      </div>
+
+      <label className="field">
+        <span>Product type</span>
+        <select value={current.value} onChange={(e) => setValue(e.target.value)} disabled={Boolean(busy)}>
+          {types.map((type) => (
+            <option key={type.value} value={type.value}>
+              {type.label}
+              {type.customised ? ' (customised)' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <p className="muted small">
+        Edit what the model is told to write for <strong>{current.label.toLowerCase()}</strong> listings. Keep the
+        <code> {'{{product}}'} </code> and <code> {'{{brand}}'} </code> markers and leave the JSON shape at the end of
+        the file intact, or listings stop parsing. Auto-detect keeps inferring the type from the product name.
+      </p>
+
+      <form onSubmit={submit} className="stack">
+        <textarea
+          className="desc-editor"
+          value={draft}
+          spellCheck={false}
+          rows={18}
+          onChange={(e) => setDraft(e.target.value)}
+          disabled={Boolean(busy)}
+        />
+        <div className="row">
+          <button type="submit" className="primary" disabled={Boolean(busy) || !dirty || !draft.trim()}>
+            Save prompt
+          </button>
+          {current.customised && (
+            <button type="button" onClick={() => onRemove(current.value)} disabled={Boolean(busy)}>
+              Revert to built-in
+            </button>
+          )}
+        </div>
+      </form>
+      <p className="muted small">
+        The output format and keyword handling are added around this text by the app and cannot be edited here, so a
+        saved prompt always still produces a valid listing. Reverting restores the built-in brief exactly.
+      </p>
+    </section>
+  );
+}
+
+export default function SettingsView({ settings, busy, prompts, canManagePrompts, onSave, onRemove, onSaveModel, onSaveBrand, onSaveTheme, onRemoveTheme, onSavePrompt, onRemovePrompt, onChangePassword }) {
   const [brandDraft, setBrandDraft] = useState(null);
   const [localError, setLocalError] = useState('');
 
@@ -158,12 +291,12 @@ export default function SettingsView({ settings, busy, onSave, onRemove, onSaveM
   return (
     <>
       <section className="card">
-        <div className="row-between">
+        <div className="card-head">
           <h2>Brand name</h2>
           <span className="muted small">{savedBrand}</span>
         </div>
-        <form onSubmit={submitBrand} className="row-between">
-          <label className="field shrink">
+        <form onSubmit={submitBrand} className="field-row">
+          <label className="field">
             <span>Name</span>
             <input
               type="text"
@@ -187,13 +320,19 @@ export default function SettingsView({ settings, busy, onSave, onRemove, onSaveM
         </p>
       </section>
 
+      <ThemeCard theme={settings.theme} busy={busy} onSave={onSaveTheme} onRemove={onRemoveTheme} />
+
+      {canManagePrompts && prompts && prompts.length > 0 && (
+        <PromptCard types={prompts} busy={busy} onSave={onSavePrompt} onRemove={onRemovePrompt} />
+      )}
+
       <section className="card">
-        <div className="row-between">
+        <div className="card-head">
           <h2>Model</h2>
           <span className="muted small">{labelFor(selected.provider)} &middot; {selected.model}</span>
         </div>
 
-        <div className="row-between">
+        <div className="field-row">
           <label className="field shrink">
             <span>Asked first</span>
             <select

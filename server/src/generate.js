@@ -1,7 +1,11 @@
-import { getProduct, updateProduct } from './db.js';
+import { consumeGeneration, getProduct, updateProduct } from './db.js';
 import { removeDocuments, writeDocuments } from './zip.js';
 import { generateListingText } from './service.js';
 import { onNetlify } from './files.js';
+import { ownerOf } from './paths.js';
+import { runAs, setPromptBody } from './requestContext.js';
+import { canGenerate, limitMessage, usageFor } from './quota.js';
+import { templateBody } from './promptTemplates.js';
 
 /** The message the seller sees when a generation attempt does not finish. */
 function describe(error) {
@@ -23,11 +27,38 @@ function describe(error) {
  * bound to one HTTP request.
  */
 export async function runGeneration(id) {
+  // Every account's listings, keys, model choice and brand come from the owner
+  // baked into the id, so nothing below has to be handed a user explicitly.
+  return runAs(ownerOf(id), () => generate(id));
+}
+
+async function generate(id) {
   const product = await getProduct(id);
   if (!product) return null;
 
+  // Hand the text model this product type's customised brief, if the owner saved
+  // one; with none primed the built-in masterPrompt wording is used, so an unset
+  // or unowned listing generates exactly as it did before templates existed.
+  setPromptBody(await templateBody(product.product_type));
+
+  const owner = ownerOf(id);
+  if (owner) {
+    // Stop a generation the account has not earned a slot for, before the text
+    // model is called, and leave the reason on the product the browser polls.
+    const usage = await usageFor(owner);
+    if (!canGenerate(usage)) {
+      await updateProduct(id, {
+        status: 'failed',
+        warnings: { ...(product.warnings || {}), error: limitMessage(usage), issues: [], status: 429 },
+      });
+      return null;
+    }
+  }
+
   await updateProduct(id, { status: 'generating' });
   try {
+    // Charge the attempt to the daily counter the moment the model is asked.
+    if (owner) await consumeGeneration(owner);
     const { result, cleaningNotes, seoWarnings, keywords, quality, seoCheck, attempts } = await generateListingText(
       product.product_name,
       product.selected_keywords || [],
