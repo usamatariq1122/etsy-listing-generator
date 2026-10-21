@@ -76,7 +76,7 @@ export default function Login({ status, onSignedIn }) {
       setError('Both entries must match.');
       return;
     }
-    const call = isSignup ? api.signUp({ email, password, name }) : api.accountSignIn({ email, password });
+    const call = isSignup ? () => api.signUp({ email, password, name }) : () => api.accountSignIn({ email, password });
     await act(call, () => setPassword(''), isSignup ? 'Creating your account…' : 'Signing in…');
   }
 
