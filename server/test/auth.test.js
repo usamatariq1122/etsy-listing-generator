@@ -77,6 +77,7 @@ const {
   resolveAccount,
   readAccount,
   accountCookie,
+  resendVerification,
   verifyAccountToken,
   resetPassword,
   needsBootstrap,
@@ -217,6 +218,20 @@ test('signInAccount returns the same answer for an unknown email and a wrong pas
 
 test('verifyAccountToken rejects a token that was never issued', async () => {
   assert.equal(await verifyAccountToken('deadbeef'), false);
+});
+
+test('signUp reports no confirmation mail while the portal cannot send any', async () => {
+  users.clear();
+  const { confirmationSent } = await signUp({ email: 'nomail@example.com', password: 'correct horse battery' });
+  assert.equal(confirmationSent, false);
+});
+
+test('resendVerification needs a real account and says when nothing went out', async () => {
+  users.clear();
+  await assert.rejects(() => resendVerification('no-such-user'), /Sign in before confirming/);
+  const { user } = await signUp({ email: 'again@example.com', password: 'correct horse battery' });
+  assert.equal(await resendVerification(user.id), false, 'no transport, no link');
+  assert.equal(verifications.size, 0, 'nothing is stored that no mailbox could receive');
 });
 
 test('readAccount pulls the account cookie out of a header', () => {

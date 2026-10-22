@@ -135,6 +135,13 @@ export default function Login({ status, onSignedIn }) {
             </p>
           )}
 
+          {isSignup && status?.mail && (
+            <p className="muted small">
+              Your account is ready the moment it is created, and a confirmation link is emailed to
+              this address. Confirm it from the sidebar when the message arrives.
+            </p>
+          )}
+
           <form onSubmit={submit} className="stack">
             {mode !== 'password' && (
               <label className="field">
@@ -163,7 +170,7 @@ export default function Login({ status, onSignedIn }) {
               </label>
             )}
 
-            {(isSignup || isReset || mode === 'password') && (
+            {(mode === 'signin' || isSignup || isReset || mode === 'password') && (
               <label className="field">
                 <span>{mode === 'password' ? 'Password' : isSignup ? 'Password' : isReset ? 'New password' : 'Password'}</span>
                 <input

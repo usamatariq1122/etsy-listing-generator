@@ -54,6 +54,7 @@ export const api = {
     }),
   accountSignOut: () => request('/api/account/logout', { method: 'POST' }),
   verifyAccount: (token) => request(`/api/account/verify?token=${encodeURIComponent(token)}`),
+  resendVerification: () => request('/api/account/verify/resend', { method: 'POST' }),
   forgot: (email) =>
     request('/api/account/forgot', {
       method: 'POST',

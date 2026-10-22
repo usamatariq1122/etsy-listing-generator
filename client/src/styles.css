@@ -122,6 +122,7 @@ body::before {
 .side-account .who-text { display: flex; flex-direction: column; min-width: 0; }
 .who-name { font-size: 13.5px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who-role { font-size: 10.5px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+.who-verify { align-self: flex-start; padding: 0; color: #fcd34d; font-size: 11px; font-weight: 600; }
 .side-signout {
   display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 6px;
   padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm);

@@ -74,6 +74,7 @@ import {
   issueReset,
   needsBootstrap,
   readAccount,
+  resendVerification,
   resetPassword,
   resolveAccount,
   signInAccount,
@@ -329,9 +330,11 @@ const routes = [
     } },
 
   { method: 'POST', pattern: '/account/signup', public: true, handler: async (ctx) => {
-      const { user, token, expiresAt } = await signUp({ email: ctx.body?.email, password: ctx.body?.password, name: ctx.body?.name });
+      const { user, token, expiresAt, confirmationSent } = await signUp({ email: ctx.body?.email, password: ctx.body?.password, name: ctx.body?.name });
       return {
-        ...json({ account: { email: user.email, role: user.role }, signedIn: true }),
+        // The account signs straight in; `confirmationSent` only says whether a
+        // link could be emailed, so the screen never promises a mail it did not send.
+        ...json({ account: { email: user.email, role: user.role }, signedIn: true, confirmationSent }),
         cookie: accountCookie(token, Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))),
       };
     } },
@@ -352,6 +355,13 @@ const routes = [
   { method: 'GET', pattern: '/account/verify', public: true, handler: async (ctx) => {
       const ok = await verifyAccountToken(ctx.query.get('token'));
       return json({ verified: ok }, ok ? 200 : 400);
+    } },
+
+  { method: 'POST', pattern: '/account/verify/resend', handler: async (ctx) => {
+      // Only a named account has an address to confirm; the legacy single-password
+      // session and an unlocked local build own no account to resend for.
+      if (!ctx.accountToken || !ctx.user) throw new HttpError('Sign in to an account to confirm its email.', 401);
+      return json({ sent: await resendVerification(ctx.user.id) });
     } },
 
   // Reset works with or without mail. Where a mailbox exists the link is

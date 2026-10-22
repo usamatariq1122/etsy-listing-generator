@@ -97,14 +97,27 @@ export const config = {
   sentryDsn: process.env.SENTRY_DSN || '',
   environment: process.env.SENTRY_ENVIRONMENT || process.env.CONTEXT || 'development',
 
-  // Email for account verification and password reset, through Resend. Off until
-  // RESEND_API_KEY is set: with no key the portal still creates and signs in
-  // accounts, it just cannot deliver a verification link. `from` must be a
-  // verified Resend sender; `url` is where those links point. See email.js.
+  // Email for account verification and password reset. Either transport works
+  // and Resend wins when its key is present. Off until one is configured: with
+  // no mail the portal still creates and signs in accounts, it just cannot
+  // deliver a link. `from` must be a sender the chosen provider accepts - for
+  // SMTP that is normally the same address as SMTP_USER. See email.js.
   mail: {
     apiKey: process.env.RESEND_API_KEY || '',
     from: process.env.MAIL_FROM || 'Listora <onboarding@resend.dev>',
     replyTo: process.env.MAIL_REPLY_TO || '',
+    smtp: {
+      host: process.env.SMTP_HOST || '',
+      port: num(process.env.SMTP_PORT, 465),
+      // 465 speaks TLS from the first byte, every other port (587) starts in
+      // plaintext and upgrades. Port 25 is blocked on serverless, so never use
+      // it. Set SMTP_SECURE=true|false to overrule the port guess.
+      secure: process.env.SMTP_SECURE
+        ? process.env.SMTP_SECURE === 'true'
+        : num(process.env.SMTP_PORT, 465) === 465,
+      user: process.env.SMTP_USER || '',
+      pass: process.env.SMTP_PASS || '',
+    },
   },
 
   // The contact address shown in the app (footer, Etsy panel, legal pages). Etsy's

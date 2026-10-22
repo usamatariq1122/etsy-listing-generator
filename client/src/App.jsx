@@ -696,6 +696,16 @@ export default function App() {
     setProduct(null);
   }
 
+  /** Re-sends the account confirmation link, and says so honestly when the
+   *  portal has no mail transport to send it with. */
+  async function resendConfirm() {
+    const data = await run('Sending the confirmation link', null, () => api.resendVerification());
+    if (!data) return;
+    setNotice(data.sent
+      ? `A fresh confirmation link is on its way to ${session.account?.email}. Open it to finish setting up the account.`
+      : 'This portal has no email set up yet, so the link could not be sent. The owner can confirm the address another way.');
+  }
+
   // The whole portal is behind the password, so nothing else is fetched until
   // the session is confirmed.
   if (!session) return <div className="app"><main><p className="muted">Checking your sign-in…</p></main></div>;
@@ -790,6 +800,16 @@ export default function App() {
               <span className="who-text">
                 <strong className="who-name">{whoName}</strong>
                 {session.account.role === 'admin' && <span className="who-role">Owner</span>}
+                {!session.account.verified && (
+                  <button
+                    className="linklike small who-verify"
+                    onClick={resendConfirm}
+                    disabled={Boolean(busy)}
+                    title={`We email a confirmation link to ${session.account.email}.`}
+                  >
+                    Confirm email
+                  </button>
+                )}
               </span>
             </div>
           )}

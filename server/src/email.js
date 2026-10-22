@@ -1,9 +1,10 @@
 import { config } from './config.js';
 
-// Outgoing email through Resend, with no SDK. Nothing is sent unless
-// RESEND_API_KEY is set, so an install without mail stays exactly as it was:
-// accounts still sign up and sign in, they simply receive no verification link.
-// The key is server-side only and never reaches a bundle.
+// Outgoing email through Resend or any SMTP server, with no SDK for the first
+// and one lazy import for the second. Nothing is sent unless a transport is
+// configured, so an install without mail stays exactly as it was: accounts still
+// sign up and sign in, they simply receive no verification link. Both credentials
+// are server-side only and never reach a bundle.
 
 export function emailProblem(email) {
   const value = String(email ?? '').trim();
@@ -14,14 +15,47 @@ export function emailProblem(email) {
   return null;
 }
 
-export const mailReady = () => Boolean(config.mail.apiKey);
+const smtpConfigured = () =>
+  Boolean(config.mail.smtp.host && config.mail.smtp.user && config.mail.smtp.pass);
+
+export const mailReady = () => Boolean(config.mail.apiKey) || smtpConfigured();
 
 const RESEND_URL = 'https://api.resend.com/emails';
 
-/** Posts one message to Resend. Never throws: a failed email must not fail the
- *  request that only wanted to notify someone. Returns true on delivery. */
+let transporter = null;
+
+/** One SMTP connection pool for the whole invocation, opened on first use. */
+async function sendThroughSmtp({ to, subject, html, text }) {
+  const { default: nodemailer } = await import('nodemailer');
+  transporter ??= nodemailer.createTransport({
+    host: config.mail.smtp.host,
+    port: config.mail.smtp.port,
+    secure: config.mail.smtp.secure,
+    auth: { user: config.mail.smtp.user, pass: config.mail.smtp.pass },
+  });
+  const info = await transporter.sendMail({
+    from: config.mail.from,
+    to: String(to),
+    subject,
+    html,
+    ...(text ? { text } : {}),
+    ...(config.mail.replyTo ? { replyTo: config.mail.replyTo } : {}),
+  });
+  return Boolean(info?.messageId);
+}
+
+/** Posts one message. Never throws: a failed email must not fail the request
+ *  that only wanted to notify someone. Returns true on delivery. */
 export async function sendMail({ to, subject, html, text }) {
   if (!mailReady()) return false;
+  if (!config.mail.apiKey) {
+    try {
+      return await sendThroughSmtp({ to, subject, html, text });
+    } catch (error) {
+      console.error('[mail] SMTP refused the message', error.message);
+      return false;
+    }
+  }
   try {
     const response = await fetch(RESEND_URL, {
       method: 'POST',

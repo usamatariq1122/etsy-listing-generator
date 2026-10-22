@@ -197,9 +197,9 @@ export async function signUp({ email, password, name }) {
   const id = crypto.randomUUID();
   const role = (await countUsers()) === 0 ? 'admin' : 'user';
   const user = await createUser({ id, email: normalised, name: String(name ?? '').trim() || null, passwordHash: await hashToStorage(password), role });
-  await issueVerification(id, 'verify');
+  const confirmationSent = await issueVerification(id, 'verify');
   const { token, expiresAt } = await createAccountSession(id);
-  return { user, token, expiresAt };
+  return { user, token, expiresAt, confirmationSent: Boolean(confirmationSent) };
 }
 
 export async function signInAccount({ email, password }) {
@@ -250,6 +250,16 @@ export async function verifyAccountToken(token) {
   if (!record) return false;
   await updateUser(record.user_id, { verified_at: new Date().toISOString() });
   return true;
+}
+
+/** Sends the confirmation link again for an account that never clicked it. With
+ *  no mail transport there is nothing to send, and the caller reports that
+ *  rather than pretending a message is on its way. */
+export async function resendVerification(userId) {
+  const user = await getUserById(userId);
+  if (!user) throw accountError('Sign in before confirming your email.', 401);
+  const token = await issueVerification(userId, 'verify');
+  return Boolean(token);
 }
 
 /** Starts a password reset. The token is always minted, so the flow works even
