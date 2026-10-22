@@ -3,6 +3,8 @@ import ListingPreview from './ListingPreview.jsx';
 import UploadSlots from './UploadSlots.jsx';
 import PackagePanel from './PackagePanel.jsx';
 import SeoScore from './SeoScore.jsx';
+import ValidationPanel from './ValidationPanel.jsx';
+import PolicyNotice from './PolicyNotice.jsx';
 
 export default function Workspace({
   product,
@@ -20,8 +22,22 @@ export default function Workspace({
 }) {
   const hasText = Boolean(product.file1Text && product.file2Text);
 
+  // Anything that changes the server's verdict is folded into one signal so the
+  // review re-checks itself after a price edit, an image change or a rewrite,
+  // instead of going stale under the seller.
+  const verdict = [
+    product.status,
+    product.price ?? '',
+    product.updatedAt ?? '',
+    (product.images || []).length,
+    (product.documents || []).filter((d) => d.source).length,
+    product.etsyDraft ? 'draft' : '',
+  ].join('|');
+
   return (
     <div className="stack">
+      <PolicyNotice />
+
       <section className="card">
         <div className="row-between">
           <div>
@@ -36,6 +52,8 @@ export default function Workspace({
           </div>
         </div>
       </section>
+
+      <ValidationPanel productId={product.id} revision={verdict} />
 
       <ListingPreview product={product} busy={busy} onSavePrice={onSavePrice} onSaveListing={onSaveListing} />
 

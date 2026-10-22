@@ -1,0 +1,1 @@
+ALTER TABLE product_images ADD COLUMN IF NOT EXISTS source VARCHAR(12) NOT NULL DEFAULT 'upload';

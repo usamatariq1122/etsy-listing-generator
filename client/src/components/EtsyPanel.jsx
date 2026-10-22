@@ -64,6 +64,10 @@ export default function EtsyPanel({ product, status, busy, onConnect, onDraft, o
   const hasText = Boolean(product.file1Text && product.file2Text);
   const filled = Boolean(quantity && whoMade && whenMade && category);
   const ready = hasText && Boolean(product.price) && filled;
+  // A send that stopped part way left a real listing with some files on it. The
+  // server records how far it got; the seller finishes that same draft rather than
+  // making a second one, and publishing waits until the whole package is attached.
+  const resumable = product.etsyDraftState?.status === 'partial';
 
   return (
     <section className="card">
@@ -141,6 +145,15 @@ export default function EtsyPanel({ product, status, busy, onConnect, onDraft, o
         </div>
       )}
 
+      {status.connected && (
+        <p className="muted small">
+          Etsy asks who made the item and when, so buyers understand the role you play in creating it.
+          Answer honestly — "I made them" fits a design you made yourself, even if a tool helped write it up.
+          Alongside these answers, Etsy needs at least one unedited, real photo of the actual item, not only
+          generated images.
+        </p>
+      )}
+
       {status.connected && hasText && !product.etsyDraft && (
         <p className="muted small">
           Title, description, tags and price come from the listing text above. The slot images and both PDFs are attached
@@ -154,23 +167,33 @@ export default function EtsyPanel({ product, status, busy, onConnect, onDraft, o
 
       {product.etsyDraft && (
         <p className="small">
-          <strong>{published ? 'Live on Etsy: ' : 'Draft on Etsy: '}</strong>
+          <strong>{resumable ? 'Partly on Etsy: ' : published ? 'Live on Etsy: ' : 'Draft on Etsy: '}</strong>
           {product.etsyDraft.url ? (
             <a href={product.etsyDraft.url} target="_blank" rel="noreferrer">{product.etsyDraft.url}</a>
           ) : (
             `listing ${product.etsyDraft.listingId}`
           )}
           <span className="muted">
-            {published
-              ? ' — you can manage it in Etsy whenever you like.'
-              : ' — review it there, or publish it from here.'}
+            {resumable
+              ? ` — ${product.etsyDraftState.files ?? 0} of the buyer files attached. Finish it below or in Etsy.`
+              : published
+                ? ' — you can manage it in Etsy whenever you like.'
+                : ' — review it there, or publish it from here.'}
           </span>
         </p>
       )}
 
       {status.connected && (
         <div className="row">
-          {!product.etsyDraft ? (
+          {resumable ? (
+            <button
+              className="primary"
+              disabled={Boolean(busy) || !ready || saving}
+              onClick={() => createDraft({ quantity, whoMade, whenMade, category, resume: true })}
+            >
+              {saving ? 'Continuing…' : 'Continue on Etsy'}
+            </button>
+          ) : !product.etsyDraft ? (
             <>
               <button
                 className="primary"

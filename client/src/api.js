@@ -72,11 +72,11 @@ export const api = {
   // exists yet — the ZIP box needs them to label its mapping.
   slots: () => request('/api/products/slots'),
   get: (id) => request(`/api/products/${id}`),
-  create: (productName, keywords = [], productType = null) =>
+  create: (productName, keywords = [], productType = null, productInfo = null) =>
     request('/api/products', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productName, keywords, productType }),
+      body: JSON.stringify({ productName, keywords, productType, productInfo }),
     }),
   // Buyer queries for the tick screen. A niche repeats inside a day come from
   // the server's cache, so this never hammers the autocomplete service.
@@ -99,6 +99,18 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(fields),
     }),
+  // The seller's product brief, saved before or after generation. Only the known
+  // fields are stored; the server scrubs and re-returns the whole listing.
+  saveInfo: (id, productInfo) =>
+    request(`/api/products/${id}/info`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productInfo }),
+    }),
+  // The backend's own verdict on whether this listing could go to Etsy. Computed
+  // live from stored state every call, so it is the gate the review panel reads —
+  // the browser never decides on its own.
+  validate: (id) => request(`/api/products/${id}/validation`),
   remove: (id) => request(`/api/products/${id}`, { method: 'DELETE' }),
   clearHistory: () => request('/api/products', { method: 'DELETE' }),
   // Bulk CSV: one row per product name. The batch is created first, then each

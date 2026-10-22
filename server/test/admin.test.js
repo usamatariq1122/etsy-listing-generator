@@ -60,6 +60,7 @@ mock.module('../src/db.js', {
     // calls them, but api.js imports them, so the mock must provide them.
     DRAFT_CLAIM: '__etsy_draft_in_progress__',
     claimEtsyDraft: async () => false,
+    claimEtsyResume: async () => false,
     releaseEtsyDraft: async () => false,
     saveProductImage: noop,
     listProductImages: async () => [],

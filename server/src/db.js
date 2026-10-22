@@ -55,10 +55,10 @@ const upsert = {
   // One settings row per key.
   setting: `INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)
      ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = CURRENT_TIMESTAMP`,
-  image: `INSERT INTO product_images (product_id, slot_id, file_name, width, height, format, bytes)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+  image: `INSERT INTO product_images (product_id, slot_id, file_name, width, height, format, bytes, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (product_id, slot_id) DO UPDATE SET file_name = EXCLUDED.file_name, width = EXCLUDED.width,
-       height = EXCLUDED.height, format = EXCLUDED.format, bytes = EXCLUDED.bytes,
+       height = EXCLUDED.height, format = EXCLUDED.format, bytes = EXCLUDED.bytes, source = EXCLUDED.source,
        uploaded_at = CURRENT_TIMESTAMP`,
   document: `INSERT INTO product_documents (product_id, file_key, source, file_name, original_name, bytes)
      VALUES (?, ?, ?, ?, ?, ?)
@@ -121,6 +121,7 @@ export async function initDb() {
       height INT NOT NULL,
       format VARCHAR(12) NOT NULL,
       bytes INT NOT NULL,
+      source VARCHAR(12) NOT NULL DEFAULT 'upload',
       uploaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (product_id, slot_id)
     )
@@ -145,6 +146,8 @@ export async function initDb() {
   await ddl('ALTER TABLE products ADD COLUMN IF NOT EXISTS etsy_listing_id VARCHAR(64)');
   await ddl('ALTER TABLE products ADD COLUMN IF NOT EXISTS etsy_draft_url VARCHAR(512)');
   await ddl('ALTER TABLE products ADD COLUMN IF NOT EXISTS etsy_synced_at TIMESTAMPTZ');
+  await ddl('ALTER TABLE products ADD COLUMN IF NOT EXISTS product_info JSONB');
+  await ddl('ALTER TABLE products ADD COLUMN IF NOT EXISTS etsy_draft_state JSONB');
   await ddl(`
     CREATE TABLE IF NOT EXISTS taxonomy_cache (
       cache_key VARCHAR(64) NOT NULL PRIMARY KEY,
@@ -217,6 +220,9 @@ export async function initDb() {
   // PDFs/images/bulk rows overflows the original VARCHAR(36).
   await ddl('ALTER TABLE product_images ALTER COLUMN product_id TYPE VARCHAR(80)');
   await ddl('ALTER TABLE product_documents ALTER COLUMN product_id TYPE VARCHAR(80)');
+  // Etsy now needs at least one unedited real photo per listing, so a stored
+  // image records whether it was uploaded by the seller or drawn by the model.
+  await ddl(`ALTER TABLE product_images ADD COLUMN IF NOT EXISTS source VARCHAR(12) NOT NULL DEFAULT 'upload'`);
   await ddl('ALTER TABLE bulk_rows ALTER COLUMN job_id TYPE VARCHAR(80)');
   await ddl('ALTER TABLE bulk_rows ALTER COLUMN product_id TYPE VARCHAR(80)');
   // Phase 3: per-user daily generation quota. `generation_date` records which
@@ -277,14 +283,16 @@ function hydrate(row) {
     selected_keywords: parseJson(row.selected_keywords, []),
     mockup_prompts: parseJson(row.mockup_prompts, []),
     infographic_prompts: parseJson(row.infographic_prompts, []),
+    product_info: parseJson(row.product_info, {}),
+    etsy_draft_state: parseJson(row.etsy_draft_state, null),
     warnings: parseJson(row.warnings, {}),
   };
 }
 
-export async function createProduct({ id, productName, keywords = [], status = 'created', userId = null, productType = null }) {
+export async function createProduct({ id, productName, keywords = [], status = 'created', userId = null, productType = null, productInfo = null }) {
   await query(
-    'INSERT INTO products (id, product_name, selected_keywords, status, user_id, product_type) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, productName, JSON.stringify(keywords), status, userId, productType],
+    'INSERT INTO products (id, product_name, selected_keywords, status, user_id, product_type, product_info) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [id, productName, JSON.stringify(keywords), status, userId, productType, productInfo ? JSON.stringify(productInfo) : null],
   );
   return getProduct(id);
 }
@@ -302,29 +310,31 @@ export async function getProductForUser(id, userId) {
 }
 
 export async function listProducts(userId = null) {
+  const columns =
+    'id, product_name, product_type, status, price, zip_name, etsy_listing_id, etsy_draft_state, created_at, updated_at';
   const { rows } = userId
     ? await query(
-        `SELECT id, product_name, status, zip_name, created_at
+        `SELECT ${columns}
            FROM products WHERE status <> 'failed' AND user_id = ? ORDER BY created_at DESC LIMIT 200`,
         [userId],
       )
     : await query(
-        `SELECT id, product_name, status, zip_name, created_at
+        `SELECT ${columns}
            FROM products WHERE status <> 'failed' ORDER BY created_at DESC LIMIT 200`,
       );
-  return rows;
+  return rows.map((row) => hydrate(row));
 }
 
 export async function updateProduct(id, fields) {
   const allowed = [
     'product_name', 'selected_keywords', 'file1_text', 'file2_text', 'mockup_prompts',
     'infographic_prompts', 'price', 'zip_name', 'status', 'warnings', 'product_type',
-    'etsy_listing_id', 'etsy_draft_url', 'etsy_synced_at',
+    'etsy_listing_id', 'etsy_draft_url', 'etsy_synced_at', 'product_info', 'etsy_draft_state',
   ];
   const entries = Object.entries(fields).filter(([key]) => allowed.includes(key));
   if (!entries.length) return getProduct(id);
 
-  const jsonColumns = new Set(['selected_keywords', 'mockup_prompts', 'infographic_prompts', 'warnings']);
+  const jsonColumns = new Set(['selected_keywords', 'mockup_prompts', 'infographic_prompts', 'warnings', 'product_info', 'etsy_draft_state']);
   const sets = [...entries.map(([key]) => `"${key}" = ?`), 'updated_at = CURRENT_TIMESTAMP'].join(', ');
   const values = entries.map(([key, value]) => (jsonColumns.has(key) ? JSON.stringify(value ?? null) : value));
 
@@ -372,11 +382,30 @@ export async function releaseEtsyDraft(id) {
   return affectedRows > 0;
 }
 
-export async function saveProductImage({ productId, slotId, fileName, width, height, format, bytes }) {
-  await query(upsert.image, [productId, slotId, fileName, width, height, format, bytes]);
+/**
+ * Atomically starts the resume of a half-finished draft: flips the recorded
+ * `etsy_draft_state` from 'partial' to 'in_progress' only if it is still
+ * 'partial', in one UPDATE. Exactly one of any number of concurrent "Continue"
+ * clicks gets `true`, so a partial draft can never have its buyer files attached
+ * twice. A row that never reached a listing (no state, or a 'failed' one) is not
+ * resumable and stays untouched.
+ */
+export async function claimEtsyResume(id) {
+  const { affectedRows } = await query(
+    `UPDATE products
+        SET etsy_draft_state = jsonb_set(etsy_draft_state, '{status}', '"in_progress"'::jsonb, false),
+            updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND etsy_draft_state->>'status' = 'partial'`,
+    [id],
+  );
+  return affectedRows > 0;
 }
 
-const IMAGE_COLUMNS = 'slot_id, file_name, width, height, format, bytes, uploaded_at';
+export async function saveProductImage({ productId, slotId, fileName, width, height, format, bytes, source = 'upload' }) {
+  await query(upsert.image, [productId, slotId, fileName, width, height, format, bytes, source]);
+}
+
+const IMAGE_COLUMNS = 'slot_id, file_name, width, height, format, bytes, source, uploaded_at';
 
 export async function listProductImages(productId) {
   const { rows } = await query(

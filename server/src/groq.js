@@ -1,5 +1,6 @@
 import { config } from './config.js';
 import { buildSystemPrompt } from './masterPrompt.js';
+import { productBrief } from './productBrief.js';
 import { extractJson } from './jsonparse.js';
 import { withRetry } from './retry.js';
 import { requireKey, resolveModel } from './apikeys.js';
@@ -34,7 +35,7 @@ function friendlyError(error, model) {
  * Calls a Groq model through the OpenAI-compatible endpoint and returns the
  * parsed package JSON. Only reached after every Gemini model has declined.
  */
-export async function callGroqText(productName, brand, keywords, modelOverride) {
+export async function callGroqText(productName, brand, keywords, modelOverride, info) {
   const apiKey = await requireKey('groq');
   const model = modelOverride || (await resolveModel('groq'));
 
@@ -55,7 +56,7 @@ export async function callGroqText(productName, brand, keywords, modelOverride) 
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: buildSystemPrompt(productName, brand, keywords) },
-            { role: 'user', content: `Create the complete listing package for: ${productName}` },
+            { role: 'user', content: `Create the complete listing package for: ${productName}${productBrief(info)}` },
           ],
         }),
       });

@@ -21,6 +21,7 @@ const DRAFT_CLAIM = '__etsy_draft_in_progress__';
 
 let claimed = false;
 let sendCalls = 0;
+let gateReady = true;
 
 const product = () => ({
   id: 'p1',
@@ -88,6 +89,7 @@ mock.module('../src/db.js', {
       claimed = false;
       return true;
     },
+    claimEtsyResume: async () => false,
     DRAFT_CLAIM,
     saveProductImage: noop,
     listProductImages: async () => [],
@@ -137,6 +139,24 @@ mock.module('../src/draft.js', {
   },
 });
 
+// The route re-validates before it spends an Etsy request; here the verdict is
+// faked so the guard can be tested on its own. gateReady decides it.
+mock.module('../src/validateListing.js', {
+  namedExports: {
+    validateListing: async () => (gateReady
+      ? { ready: true, errors: [], warnings: [], info: [], findings: [], summary: {} }
+      : {
+        ready: false,
+        errors: [{ level: 'error', section: 'price', message: 'Etsy needs a price above zero, and only you set it. Add one above.' }],
+        warnings: [],
+        info: [],
+        findings: [],
+        summary: {},
+      }),
+    submissionErrors: (v) => v.errors.map((e) => e.message),
+  },
+});
+
 const { handleApi } = await import('../src/api.js');
 
 const draft = () =>
@@ -174,4 +194,21 @@ test('a package already claimed mid-flight is refused before it is created', asy
 
   await assert.rejects(draft(), (err) => err.status === 409);
   assert.equal(sendCalls, 0, 'a refused draft never reaches Etsy');
+});
+
+test('the backend validation gate blocks a not-ready listing before Etsy', async () => {
+  // The re-validation runs ahead of the claim, so a listing the server judges
+  // unready is refused and no request ever reaches Etsy or the claim layer.
+  gateReady = false;
+  claimed = false;
+  sendCalls = 0;
+
+  await assert.rejects(draft(), (err) => {
+    assert.equal(err.status, 409, 'a not-ready listing is a conflict');
+    assert.ok(Array.isArray(err.issues) && err.issues.length, 'the plain-language blockers travel back');
+    return true;
+  });
+  assert.equal(sendCalls, 0, 'a blocked draft never reaches Etsy');
+  assert.equal(claimed, false, 'a blocked draft never claims the package');
+  gateReady = true;
 });

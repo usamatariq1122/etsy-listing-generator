@@ -3,6 +3,7 @@ import {
   clearProducts,
   clearProductsForUser,
   claimEtsyDraft,
+  claimEtsyResume,
   releaseEtsyDraft,
   DRAFT_CLAIM,
   createProduct,
@@ -44,7 +45,9 @@ import { TEXT_FILES } from './documents.js';
 import { buildZip, documentBytes, keepUploadedPdf, restoreGeneratedPdf, writeDocuments } from './zip.js';
 import { startGeneration } from './generate.js';
 import { applyListingEdits, listingIssues } from './listingEdit.js';
+import { submissionErrors, validateListing } from './validateListing.js';
 import { SEO_LIMITS, scrubBannedWord } from './validate.js';
+import { normalizeProductInfo, hasProductInfo } from './productBrief.js';
 import { keyCoverage, keyIssues, keyStatus, PROVIDERS, removeKey, removeModel, saveKey, saveModel } from './apikeys.js';
 import { brandIssues, clearBrand, saveBrand } from './brand.js';
 import { clearTheme, saveTheme, themeColors, themeIssues } from './theme.js';
@@ -208,6 +211,7 @@ async function publicView(product) {
     id: product.id,
     productName: product.product_name,
     productType: product.product_type ?? null,
+    productInfo: product.product_info || {},
     keywords: product.selected_keywords || [],
     status: product.status,
     file1Text: product.file1_text || '',
@@ -228,6 +232,7 @@ async function publicView(product) {
       height: image.height,
       format: image.format,
       bytes: image.bytes,
+      source: image.source ?? 'upload',
       uploadedAt: image.uploaded_at,
       previewUrl: `/api/products/${product.id}/image/${image.slot_id}`,
     })),
@@ -255,6 +260,9 @@ async function publicView(product) {
     etsyDraft: product.etsy_listing_id && product.etsy_listing_id !== DRAFT_CLAIM
       ? { listingId: product.etsy_listing_id, url: product.etsy_draft_url, syncedAt: product.etsy_synced_at }
       : null,
+    // The last draft attempt's outcome, so the Etsy panel can offer "Continue"
+    // on a send that got part way. Never a token — only progress and a message.
+    etsyDraftState: product.etsy_draft_state ?? null,
   };
 }
 
@@ -262,6 +270,35 @@ async function publicView(product) {
  *  request used to, so nothing else has to learn a new shape. */
 async function finished(id) {
   return publicView(await getProduct(id));
+}
+
+/**
+ * Records the outcome of a draft attempt so the seller sees what got onto Etsy
+ * and can resume a send that stopped part way. Only progress, a listing id and a
+ * plain-language message travel — never a token. The shape is:
+ *   { status: 'in_progress' | 'partial' | 'complete' | 'failed',
+ *     listingId, url, images, files, error, attempts, updatedAt }
+ */
+async function recordDraftState(id, state) {
+  await updateProduct(id, { etsy_draft_state: { ...state, updatedAt: new Date().toISOString() } });
+}
+
+/**
+ * Turns a sendDraft failure into the message the seller sees. When a listing was
+ * actually created (sendDraft tags the error with what got on it), the draft is
+ * real and resumable, so the counts travel in plain words rather than a bare 502.
+ * Any other error is rethrown untouched.
+ */
+function resumableError(error) {
+  if (!error.draft) return error;
+  const d = error.draft;
+  const partly = `${d.images} image${d.images === 1 ? '' : 's'} and ${d.files} file${d.files === 1 ? '' : 's'}`;
+  return new HttpError(
+    `${error.message} A draft exists and has ${partly} on it, so nothing is lost: ${d.url || `listing ${d.listingId}`}. `
+      + 'Fix the listing, or press Continue to finish attaching the rest.',
+    502,
+    { resumable: true },
+  );
 }
 
 const routes = [
@@ -400,10 +437,18 @@ const routes = [
         products: rows.map((row) => ({
           id: row.id,
           productName: row.product_name,
+          productType: row.product_type ?? null,
           status: row.status,
+          price: row.price ?? null,
           zipReady: Boolean(row.zip_name),
           downloadUrl: row.zip_name ? `/api/products/${row.id}/download` : null,
+          // How far this package got on Etsy, read from the recorded draft state.
+          // Never a guessed "live" — only what a draft attempt actually stored.
+          etsy: row.etsy_listing_id && row.etsy_listing_id !== DRAFT_CLAIM
+            ? { listingId: row.etsy_listing_id, url: row.etsy_draft_url ?? null, status: row.etsy_draft_state?.status ?? 'draft' }
+            : null,
           createdAt: row.created_at,
+          updatedAt: row.updated_at,
         })),
       });
     } },
@@ -425,6 +470,7 @@ const routes = [
       }
 
       const id = ctx.user ? ownedId(ctx.user.id, crypto.randomUUID()) : crypto.randomUUID();
+      const info = normalizeProductInfo(ctx.body?.productInfo);
       await createProduct({
         id,
         productName,
@@ -432,6 +478,7 @@ const routes = [
         status: 'queued',
         userId: ctx.user?.id ?? null,
         productType: resolveProductType(ctx.body?.productType),
+        productInfo: hasProductInfo(info) ? info : null,
       });
       return json({ product: await finished(id) }, 201);
     } },
@@ -479,11 +526,28 @@ const routes = [
       return json({ product: await publicView(product) });
     } },
 
+  // The backend's own verdict on whether this listing could go to Etsy. It is
+  // computed live from stored state on every call — never cached — so a review
+  // panel can always trust what it just read.
+  { method: 'GET', pattern: '/products/:id/validation', handler: async (ctx) => {
+      const product = await loadProduct(ctx.params, ctx.user);
+      return json({ validation: await validateListing(product) });
+    } },
+
   // Only the seller sets a price, so this is the one field the portal writes
   // from a typed number instead of a model.
   { method: 'PUT', pattern: '/products/:id/price', handler: async (ctx) => {
       const product = await loadProduct(ctx.params, ctx.user);
       const updated = await updateProduct(product.id, { price: priceOf(ctx.body?.price) });
+      return json({ product: await publicView(updated) });
+    } },
+
+  // The seller's own product brief. Free text, so the marketplace-word rule that
+  // guards every printed file applies here too before it is stored.
+  { method: 'PUT', pattern: '/products/:id/info', handler: async (ctx) => {
+      const product = await loadProduct(ctx.params, ctx.user);
+      const info = normalizeProductInfo(ctx.body?.productInfo ?? ctx.body);
+      const updated = await updateProduct(product.id, { product_info: hasProductInfo(info) ? info : {} });
       return json({ product: await publicView(updated) });
     } },
 
@@ -538,7 +602,7 @@ const routes = [
           413,
         );
       }
-      const info = await storeImage(product, slot, Buffer.from(ctx.raw));
+      const info = await storeImage(product, slot, Buffer.from(ctx.raw), 'upload');
       if (!info.ok) throw new HttpError(info.message, 422);
       await invalidatePackage(product.id);
       return json({
@@ -564,7 +628,7 @@ const routes = [
       if (buffer.length > maxUploadBytes()) {
         throw new HttpError('The generated image is too large for this host. Upload your own instead.', 413);
       }
-      const info = await storeImage(product, slot, buffer);
+      const info = await storeImage(product, slot, buffer, 'generate');
       if (!info.ok) throw new HttpError(info.message, 422);
       await invalidatePackage(product.id);
       return json({
@@ -796,17 +860,97 @@ const routes = [
       return json({ removed: true, ...(await disconnect()) });
     } },
 
-  // One draft, then never again for this package: a second click would make a
-  // second listing, so the seller is sent back to the draft Etsy already has.
-  // The claim below is a single atomic UPDATE, so two simultaneous requests
-  // cannot both slip past the check and create two drafts.
+  // One draft per package: a second completed send would make a second listing, so
+  // a finished draft is sent back to Etsy rather than re-created. A send that only
+  // got part way, though, is resumable — the "Continue" path finishes the same
+  // listing rather than abandoning it. The claim (fresh) and the state flip
+  // (resume) are each a single atomic UPDATE, so two clicks cannot run at once.
   { method: 'POST', pattern: '/etsy/draft', handler: async (ctx) => {
       requireEtsy();
       const product = await loadProduct({ id: ctx.body?.productId }, ctx.user);
+
+      // The seller's standing answers fill any question this request left blank,
+      // so a saved default means one click is enough. A value sent here always
+      // wins, so the Etsy panel can still override per listing. The two control
+      // fields are never Etsy answers, so they are not merged in.
+      const saved = await etsyDefaults();
+      const filled = { ...saved };
+      for (const [key, value] of Object.entries(ctx.body ?? {})) {
+        if (key === 'productId' || key === 'resume') continue;
+        if (String(value ?? '').trim()) filled[key] = value;
+      }
+
+      // The mandatory gate: the backend verdict, judged with exactly the answers
+      // this draft would send, decides whether Etsy could accept it at all. Nothing
+      // is claimed and no request reaches Etsy until it passes. requireFiles is off
+      // because the pipeline re-renders the buyer PDFs as the draft is built; every
+      // other blocker is enforced here.
+      const validation = await validateListing(product, { answers: filled, requireFiles: false });
+      if (!validation.ready) {
+        throw new HttpError('This listing is not ready for Etsy yet. Fix the points below, then try again.', 409, {
+          issues: submissionErrors(validation),
+        });
+      }
+
+      // A send started a moment ago is still in flight — never start it twice.
       if (product.etsy_listing_id === DRAFT_CLAIM) {
         throw new HttpError('A draft for this package is already being created. Wait for it to finish.', 409);
       }
-      if (product.etsy_listing_id) {
+
+      const prior = product.etsy_draft_state ?? null;
+      const realListing = Boolean(product.etsy_listing_id)
+        && product.etsy_listing_id !== DRAFT_CLAIM
+        && /^\d+$/.test(String(product.etsy_listing_id));
+      const resumable = Boolean(realListing && prior?.status === 'partial');
+
+      if (resumable) {
+        if (!ctx.body?.resume) {
+          throw new HttpError(
+            `A previous attempt left this draft part-built (${prior.files ?? 0} of ${TEXT_FILES.length} file(s) attached): `
+              + `${product.etsy_draft_url || `listing ${product.etsy_listing_id}`}. Press Continue to finish it, rather than starting over.`,
+            409,
+            { resumable: true },
+          );
+        }
+        // Atomic flip from 'partial' so a double-click cannot re-attach the files.
+        if (!(await claimEtsyResume(product.id))) {
+          throw new HttpError('This draft is already being continued, or its state has changed. Reload the listing and try again.', 409);
+        }
+        const attempts = (prior.attempts ?? 0) + 1;
+        await recordDraftState(product.id, {
+          status: 'in_progress', attempts,
+          listingId: product.etsy_listing_id, url: product.etsy_draft_url ?? null,
+          images: prior.images ?? 0, files: prior.files ?? 0, error: null,
+        });
+        try {
+          const taxonomyId = await resolveCategoryId(filled.category);
+          const draft = await sendDraft(product, filled, taxonomyId, {
+            resume: { listingId: product.etsy_listing_id, url: product.etsy_draft_url ?? null, filesDone: prior.files ?? 0 },
+          });
+          await recordDraftState(product.id, {
+            status: 'complete', attempts, listingId: draft.listingId, url: draft.url ?? null,
+            images: draft.images, files: draft.files, error: null,
+          });
+          return json({ draft, product: await publicView(await getProduct(product.id)) });
+        } catch (error) {
+          // A resume that fails again is still resumable: the listing exists, so
+          // record how far it got and leave the state 'partial'. If the failure
+          // happened before anything was re-attached, keep the prior progress.
+          const progress = error.draft ?? {
+            listingId: product.etsy_listing_id, url: product.etsy_draft_url ?? null,
+            images: prior.images ?? 0, files: prior.files ?? 0,
+          };
+          await recordDraftState(product.id, {
+            status: 'partial', attempts, listingId: progress.listingId, url: progress.url ?? null,
+            images: progress.images, files: progress.files, error: error.message,
+          });
+          throw resumableError(error);
+        }
+      }
+
+      // Not resumable: a fully-built draft stays where it is — the seller edits it
+      // in Etsy. Anything else is a fresh send, guarded by the atomic claim.
+      if (realListing) {
         throw new HttpError(
           `This package is already in Etsy as a draft${product.etsy_draft_url ? ` — open it there to change it: ${product.etsy_draft_url}` : ''}.`,
           409,
@@ -815,31 +959,34 @@ const routes = [
       if (!(await claimEtsyDraft(product.id))) {
         throw new HttpError('This package is already being sent to Etsy, or is already a draft there.', 409);
       }
-      // The seller's standing answers fill any question this request left blank,
-      // so a saved default means one click is enough. A value sent here always
-      // wins, so the Etsy panel can still override per listing. Resolving the
-      // category happens inside the guard below: if it is blank or mistyped the
-      // claim is released, so the listing is not stranded as "already sending".
-      const saved = await etsyDefaults();
-      const filled = { ...saved };
-      for (const [key, value] of Object.entries(ctx.body ?? {})) {
-        if (String(value ?? '').trim()) filled[key] = value;
-      }
+      const attempts = (prior?.attempts ?? 0) + 1;
+      await recordDraftState(product.id, {
+        status: 'in_progress', attempts, listingId: null, url: null, images: 0, files: 0, error: null,
+      });
       try {
         const taxonomyId = await resolveCategoryId(filled.category);
         const draft = await sendDraft(product, filled, taxonomyId);
+        await recordDraftState(product.id, {
+          status: 'complete', attempts, listingId: draft.listingId, url: draft.url ?? null,
+          images: draft.images, files: draft.files, error: null,
+        });
         return json({ draft, product: await publicView(await getProduct(product.id)) });
       } catch (error) {
-        // Failed before a real listing id was stored: clear the claim so the
-        // seller can retry. Once sendDraft has stored an id this is a no-op, so
-        // a partially-built draft keeps its link rather than being orphaned.
+        // Failed before a real listing id was stored: clear the claim so the seller
+        // can retry. Once sendDraft stored an id this is a no-op, so a partially-built
+        // draft keeps its link rather than being orphaned.
         await releaseEtsyDraft(product.id);
-        if (!error.draft) throw error;
-        const partly = `${error.draft.images} image${error.draft.images === 1 ? '' : 's'} and ${error.draft.files} file${error.draft.files === 1 ? '' : 's'}`;
-        throw new HttpError(
-          `${error.message} A draft was created and got ${partly} onto it, so nothing is lost: ${error.draft.url || `listing ${error.draft.listingId}`}. Fix it or delete it in Etsy.`,
-          502,
-        );
+        if (error.draft) {
+          await recordDraftState(product.id, {
+            status: 'partial', attempts, listingId: error.draft.listingId, url: error.draft.url ?? null,
+            images: error.draft.images, files: error.draft.files, error: error.message,
+          });
+        } else {
+          await recordDraftState(product.id, {
+            status: 'failed', attempts, listingId: null, url: null, images: 0, files: 0, error: error.message,
+          });
+        }
+        throw resumableError(error);
       }
     } },
 

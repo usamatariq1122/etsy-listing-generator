@@ -62,6 +62,7 @@ async function generate(id) {
     const { result, cleaningNotes, seoWarnings, keywords, quality, seoCheck, attempts } = await generateListingText(
       product.product_name,
       product.selected_keywords || [],
+      product.product_info || {},
     );
     // A short guide or a lite-model answer is flagged before anything is
     // printed, so no PDF appears as if nothing were wrong.

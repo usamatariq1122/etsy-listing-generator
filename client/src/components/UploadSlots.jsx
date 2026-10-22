@@ -117,6 +117,11 @@ export default function UploadSlots({ product, busy, onUpload, onRemove, onGener
         changed unless you press one.
         Whatever you add here is packed into the ZIP under its own numbered name.
       </p>
+      <p className="inline-note">
+        <strong>Real photo required.</strong> Etsy now refuses a listing made only of generated images — at least one
+        image must be an unedited, real photo of the actual item against a real background. Use "Generate image" for
+        mockups and infographics, but upload a real photo of your own product for the cover before saving a draft.
+      </p>
 
       <ul className="slots">
         {slots.map((slot) => {
@@ -136,6 +141,7 @@ export default function UploadSlots({ product, busy, onUpload, onRemove, onGener
                 ) : (
                   <span className="slot-empty">{slot.zipName}.jpg</span>
                 )}
+                {image?.source === 'generate' && <span className="slot-badge">AI image</span>}
               </div>
 
               <div className="slot-body">
@@ -146,6 +152,7 @@ export default function UploadSlots({ product, busy, onUpload, onRemove, onGener
                       {image
                         ? `${image.width} × ${image.height}px · ${(image.bytes / MB).toFixed(1)} MB · packed as ${image.fileName}`
                         : 'Nothing uploaded yet.'}
+                      {image?.source === 'generate' && ' · generated, not a real photo'}
                       {working === slot.id && (fixes[slot.id] ? ' Fitting the image…' : ' Checking size and shape…')}
                       {generating === slot.id && ' Drawing the image…'}
                     </p>

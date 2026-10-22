@@ -94,10 +94,47 @@ body::before {
 .side-item svg { width: 19px; height: 19px; flex: 0 0 19px; }
 .side-item:hover { color: var(--ink); background: var(--glass); }
 .side-item.active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-glow); }
-.side-foot { margin-top: auto; padding: 14px 8px 4px; border-top: 1px solid var(--line); }
+.side-foot { margin-top: auto; padding: 14px 8px 4px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
 .usage { display: flex; flex-direction: column; gap: 6px; }
 .usage-bar { height: 6px; border-radius: 999px; background: var(--glass-strong); overflow: hidden; }
 .usage-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #0a9f6d); }
+
+/* Desktop rail toggle + the account chip and Sign out that now live in the
+   sidebar footer. The chevron collapses the rail to icons; both stay hidden
+   from the mobile drawer, which always shows full labels. */
+.side-collapse {
+  margin-left: auto; width: 30px; height: 30px; flex: 0 0 30px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--glass); color: var(--muted); cursor: pointer; place-items: center;
+}
+.side-collapse:hover { color: var(--ink); background: var(--glass-strong); }
+.side-collapse svg { width: 18px; height: 18px; }
+.side-account { display: flex; align-items: center; gap: 10px; padding: 6px 6px 2px; }
+.side-account .who-text { display: flex; flex-direction: column; min-width: 0; }
+.who-name { font-size: 13.5px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who-role { font-size: 10.5px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+.side-signout {
+  display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 6px;
+  padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--glass); color: var(--ink); font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: border-color 0.18s, color 0.18s, background 0.18s;
+}
+.side-signout svg { width: 19px; height: 19px; flex: 0 0 19px; }
+.side-signout:hover { color: #fda4af; border-color: var(--accent-glow); }
+
+@media (min-width: 901px) {
+  .sidebar.collapsed { flex-basis: 76px; width: 76px; padding: 22px 10px; align-items: stretch; }
+  .sidebar.collapsed .brand { flex-direction: column; gap: 10px; justify-content: center; padding: 2px 0 16px; }
+  .sidebar.collapsed .brand-name { display: none; }
+  .sidebar.collapsed .side-collapse { margin: 0 auto; }
+  .sidebar.collapsed .side-item { justify-content: center; padding: 11px 0; }
+  .sidebar.collapsed .side-item span { display: none; }
+  .sidebar.collapsed .usage { display: none; }
+  .sidebar.collapsed .side-account { justify-content: center; }
+  .sidebar.collapsed .side-account .who-text { display: none; }
+  .sidebar.collapsed .side-signout { justify-content: center; padding: 10px 0; }
+  .sidebar.collapsed .side-signout span { display: none; }
+}
 
 /* Mobile drawer controls: the rail is always in flow on desktop, so the
    hamburger, the in-drawer close button and the scrim stay hidden until the
@@ -120,7 +157,7 @@ body::before {
 
 .main-col { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .appbar {
-  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: flex-start;
   gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--line);
   background: rgba(11, 16, 20, 0.72); backdrop-filter: blur(14px) saturate(140%);
 }
@@ -147,6 +184,7 @@ body::before {
   .sidebar.open { transform: translateX(0); box-shadow: 0 0 60px -12px rgba(0, 0, 0, 0.6); }
   .brand { padding: 2px 4px 18px; }
   .nav-close { display: grid; }
+  .side-collapse { display: none; }
   .nav-scrim { display: block; }
   .side-nav { flex-direction: column; }
   .side-item { width: 100%; padding: 11px 14px; }
@@ -221,6 +259,13 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focu
   outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(16, 201, 138, 0.22);
 }
+textarea {
+  width: 100%; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); font-size: 15px; color: var(--ink); font-family: inherit;
+  background: rgba(255, 255, 255, 0.05); resize: vertical; transition: border-color 0.18s, box-shadow 0.18s;
+}
+textarea::placeholder { color: #6d7b86; }
+textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(16, 201, 138, 0.22); }
 
 .radio { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 8px; cursor: pointer; background: var(--glass); }
 .radio input { margin-top: 3px; accent-color: var(--accent); }
@@ -257,6 +302,11 @@ button.danger:hover:not(:disabled) { background: rgba(244, 63, 94, 0.22); border
 /* Equal colour swatches that reflow into rows instead of uneven fixed-width boxes. */
 .color-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
 .color-grid .field { margin-bottom: 0; }
+/* The optional product-brief fields: short inputs in reflowing columns, the
+   multi-line ones given the full width so they stay readable. */
+.detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 16px; margin-top: 8px; }
+.detail-grid .field { margin-bottom: 16px; }
+.detail-grid .field.wide { grid-column: 1 / -1; }
 .color-grid input[type="color"] { width: 100%; height: 42px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.05); cursor: pointer; }
 /* Admin summary tiles: a big number over a small label, in a reflowing row. */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 12px; }
@@ -314,13 +364,19 @@ details[open] summary::after { content: "\2212"; }
 
 table.manifest { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.table-scroll table.manifest { min-width: 560px; }
+.table-scroll table.manifest { min-width: 760px; }
 table.manifest th, table.manifest td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 table.manifest tbody tr:hover { background: var(--glass); }
 table.manifest th { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 table.manifest td.name { font-weight: 600; }
 table.manifest td.bad { color: #fda4af; font-weight: 600; }
 table.manifest td:last-child { white-space: nowrap; }
+
+.tracker-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 14px 0 4px; }
+.tracker-search { flex: 1 1 220px; min-width: 180px; }
+.tracker-filter { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.tracker-filter select { min-width: 150px; }
+.tracker-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); padding-bottom: 8px; }
 
 .slots { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .slot {
@@ -329,11 +385,17 @@ table.manifest td:last-child { white-space: nowrap; }
 }
 .slot.filled { border-color: var(--ok-line); }
 .slot-preview {
+  position: relative;
   aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; overflow: hidden;
   border: 1px dashed var(--line); border-radius: var(--radius-sm); background: rgba(4, 8, 11, 0.55);
 }
 .slot.filled .slot-preview { border-style: solid; }
 .slot-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.slot-badge {
+  position: absolute; top: 6px; left: 6px; padding: 2px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.2px; color: #fcd34d;
+  background: rgba(4, 8, 11, 0.78); border: 1px solid var(--warn-line);
+}
 .slot-empty { padding: 0 8px; text-align: center; font-size: 12px; color: var(--muted); font-family: ui-monospace, Menlo, Consolas, monospace; }
 .slot-body > p { margin: 4px 0; }
 .slot-body .row { margin-top: 10px; }
@@ -396,6 +458,24 @@ table.manifest td:last-child { white-space: nowrap; }
 .drop > .row { margin-bottom: 14px; }
 .drop .score-items { margin: 0 14px 14px; }
 .drop-meta { color: var(--muted); font-size: 12.5px; font-weight: 500; font-style: normal; }
+
+/* The review panel: the server's verdict, grouped into the sections it graded. */
+.validation-banner { border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13.5px; margin: 12px 0 4px; border: 1px solid var(--line); }
+.validation-banner.ok { color: #d1fae5; background: var(--ok-bg); border-color: var(--ok-line); }
+.validation-banner.blocked { color: #fecdd3; background: var(--err-bg); border-color: var(--err-line); }
+.validation-group { margin-top: 14px; }
+.validation-head { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.validation-head.error { color: #fda4af; }
+.validation-head.warn { color: #fbbf24; }
+.validation-head.info { color: #7dd3fc; }
+.validation-section { margin-bottom: 10px; }
+.validation-section-title { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.validation-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.validation-items li { font-size: 13px; border-left: 3px solid var(--line); padding: 2px 0 2px 12px; }
+.validation-items.error li { border-color: var(--err-line); }
+.validation-items.warn li { border-color: var(--warn-line); }
+.validation-items.info li { border-color: var(--info-line); }
+.drop > .validation-group { margin: 0 14px 14px; }
 
 /* The simple screen: one name box, one ZIP box, one folded Advanced panel. */
 .zipdrop {

@@ -94,8 +94,16 @@ function draftFields(body, product, taxonomyId) {
  * Sends one package to Etsy. The listing id is stored as soon as Etsy has it, so
  * a failure half way through still leaves the seller with the draft link instead
  * of an orphan listing they cannot find.
+ *
+ * `resume` lets an interrupted send finish rather than start over: when a previous
+ * attempt already created the listing (its id is stored) this re-attaches only what
+ * is still missing to that same listing, so no second draft is ever made. Etsy
+ * replaces an image uploaded at a rank it already has, so the images are simply
+ * re-sent from rank 1; a digital file is appended, not replaced, so the first
+ * `filesDone` already-uploaded files are skipped to avoid handing the buyer a
+ * duplicate.
  */
-export async function sendDraft(product, body, taxonomyId) {
+export async function sendDraft(product, body, taxonomyId, { resume = null } = {}) {
   const { fields, listing } = draftFields(body, product, taxonomyId);
   const images = await storedImages(product);
   if (!images.length) {
@@ -105,12 +113,25 @@ export async function sendDraft(product, body, taxonomyId) {
   // Everything above is checked before the shop is even looked up, so a missing
   // answer never costs a request to Etsy.
   const shop = await shopId();
-  const created = await createDraftListing(shop, fields);
-  const listingId = created?.listing_id;
-  if (!listingId) throw new HttpError('Etsy accepted the request but did not return a listing.', 502);
-  await remember(product.id, listingId, created.url);
 
-  const sent = { listingId, url: created.url ?? null, images: 0, files: 0, title: listing.title };
+  // A resume reuses the listing the first attempt made; a fresh send creates one.
+  let listingId = resume?.listingId ?? null;
+  let url = resume?.url ?? null;
+  if (listingId) {
+    await remember(product.id, listingId, url);
+  } else {
+    const created = await createDraftListing(shop, fields);
+    listingId = created?.listing_id;
+    if (!listingId) throw new HttpError('Etsy accepted the request but did not return a listing.', 502);
+    url = created.url ?? null;
+    await remember(product.id, listingId, url);
+  }
+
+  // Images overwrite by rank, so every rank is (re)sent and the count ends at the
+  // full set. Digital files append rather than replace, so the `filesDone` the
+  // first attempt already attached are skipped to avoid a duplicate for the buyer.
+  const filesDone = resume ? Math.max(0, Number(resume.filesDone) || 0) : 0;
+  const sent = { listingId, url, images: 0, files: filesDone, title: listing.title };
   try {
     for (const [index, image] of images.entries()) {
       await uploadListingImage(shop, listingId, {
@@ -119,13 +140,15 @@ export async function sendDraft(product, body, taxonomyId) {
         type: image.format === 'jpg' ? 'image/jpeg' : `image/${image.format}`,
         rank: index + 1,
       });
-      sent.images += 1;
+      sent.images = index + 1;
     }
-    for (const [index, file] of TEXT_FILES.entries()) {
-      const found = await documentBytes(product, file.key);
+    const files = TEXT_FILES.map((file) => ({ file, bytes: null, name: null }));
+    for (const [index, entry] of files.entries()) {
+      if (index < filesDone) continue;
+      const found = await documentBytes(product, entry.file.key);
       if (!found.bytes) continue;
       await uploadListingFile(shop, listingId, { bytes: found.bytes, name: found.name, rank: index + 1 });
-      sent.files += 1;
+      sent.files = index + 1;
     }
     // Digital files can only be attached after the listing exists, so the
     // listing is switched to a download once they are on it.

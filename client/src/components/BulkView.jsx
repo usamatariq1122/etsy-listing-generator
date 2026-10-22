@@ -144,6 +144,10 @@ export default function BulkView({ onNotice, onOpenProduct }) {
           </button>
         </div>
         {error && <p className="inline-error">{error}</p>}
+        <p className="inline-note">
+          Bulk mode writes the listing text only. It never sends anything to Etsy or publishes on its own.
+          Open each finished row to review it, add your real photo and price, and press Publish yourself.
+        </p>
       </section>
 
       {jobs.length > 0 && (

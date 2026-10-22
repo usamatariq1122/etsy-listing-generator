@@ -23,7 +23,7 @@ async function removeFiles(productId, slot) {
  * the same shape as checkImage, so the caller can show the exact reason a file
  * was rejected.
  */
-export async function storeImage(product, slot, buffer) {
+export async function storeImage(product, slot, buffer, source = 'upload') {
   const info = checkImage(buffer);
   if (!info.ok) return info;
 
@@ -38,6 +38,7 @@ export async function storeImage(product, slot, buffer) {
     height: info.height,
     format: info.format,
     bytes: info.bytes,
+    source,
   });
 
   return info;

@@ -26,6 +26,9 @@ function rewriteHint(quality) {
 export default function App() {
   const [view, setView] = useState('studio');
   const [navOpen, setNavOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem('listora.nav.collapsed') === '1'; } catch { return false; }
+  });
   const [product, setProduct] = useState(null);
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
@@ -37,6 +40,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [productName, setProductName] = useState('');
   const [productType, setProductType] = useState('general');
+  const [productInfo, setProductInfo] = useState({});
   const [picked, setPicked] = useState([]);
   const [slots, setSlots] = useState([]);
   const [staged, setStaged] = useState([]);
@@ -47,6 +51,16 @@ export default function App() {
   // studio. These keep the old open/toggle names the banners and loaders use.
   const advancedOpen = view === 'settings';
   const setAdvancedOpen = (open) => setView(open ? 'settings' : 'studio');
+
+  // The desktop rail can shrink to icons; the choice persists across reloads.
+  // The mobile drawer ignores it (its styles are scoped above 900px).
+  function toggleCollapsed() {
+    setCollapsed((c) => {
+      const next = !c;
+      try { localStorage.setItem('listora.nav.collapsed', next ? '1' : '0'); } catch { /* private mode */ }
+      return next;
+    });
+  }
 
   const loadHealth = useCallback(() => {
     api.health().then(setHealth).catch(() => setHealth(null));
@@ -239,7 +253,7 @@ export default function App() {
     await generateText(
       'Generating your listing package',
       'The text model is writing File 1, File 2 and 7 image prompts. This takes about 30-60 seconds.',
-      () => api.create(productName.trim(), picked, productType === 'general' ? null : productType),
+      () => api.create(productName.trim(), picked, productType === 'general' ? null : productType, productInfo),
     );
   }
 
@@ -426,11 +440,21 @@ export default function App() {
    */
   async function sendDraftFor(productId, fields) {
     const data = await run(
-      'Saving your draft in Etsy',
+      fields?.resume ? 'Continuing your Etsy draft' : 'Saving your draft in Etsy',
       'Creating the listing, then attaching your images and both PDFs. It is saved as a draft, not published.',
       () => api.etsyDraft(productId, fields),
     );
-    if (!data) return false;
+    if (!data) {
+      // A send that reached Etsy but stopped part way is resumable. The error
+      // swallowed the product, so reload it and let the panel offer "Continue".
+      try {
+        const refreshed = await api.get(productId);
+        setProduct(refreshed.product);
+      } catch {
+        /* the panel keeps its last-known state */
+      }
+      return false;
+    }
     setProduct(data.product);
     const { draft } = data;
     setNotice(
@@ -450,7 +474,7 @@ export default function App() {
     const created = await generateText(
       'Generating your listing package',
       'The text model is writing File 1, File 2 and 7 image prompts. This takes about 30-60 seconds.',
-      () => api.create(productName.trim(), picked, productType === 'general' ? null : productType),
+      () => api.create(productName.trim(), picked, productType === 'general' ? null : productType, productInfo),
     );
     if (!created) return;
     if (missing.length) {
@@ -535,6 +559,7 @@ export default function App() {
       setProduct(data.product);
       setProductName(data.product.productName || '');
       setProductType(data.product.productType || 'general');
+      setProductInfo(data.product.productInfo || {});
       setPicked(data.product.keywords || []);
       setStaged([]);
     });
@@ -544,6 +569,7 @@ export default function App() {
     setProduct(null);
     setProductName('');
     setProductType('general');
+    setProductInfo({});
     setPicked([]);
     setStaged([]);
     setError(null);
@@ -702,6 +728,7 @@ export default function App() {
       className={view === id ? 'side-item active' : 'side-item'}
       onClick={() => { setView(id); setNavOpen(false); }}
       disabled={Boolean(busy)}
+      title={label}
     >
       <NavIcon name={id} />
       <span>{label}</span>
@@ -711,10 +738,20 @@ export default function App() {
   return (
     <div className="shell">
       {navOpen && <div className="nav-scrim" onClick={() => setNavOpen(false)} />}
-      <aside className={navOpen ? 'sidebar open' : 'sidebar'}>
+      <aside className={['sidebar', navOpen && 'open', collapsed && 'collapsed'].filter(Boolean).join(' ')}>
         <div className="brand">
           <span className="brand-mark"><img src="/brand/listora-icon.svg" alt="Listora logo" /></span>
           <span className="brand-name">Listora</span>
+          <button
+            className="side-collapse"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
+            title={collapsed ? 'Expand menu' : 'Collapse menu'}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {collapsed ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}
+            </svg>
+          </button>
           <button className="nav-close" onClick={() => setNavOpen(false)} aria-label="Close menu">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />
@@ -735,6 +772,25 @@ export default function App() {
               <span className="muted small">{usage.remaining} of {usage.limit} left today</span>
             </div>
           )}
+          {session.account && (
+            <div className="side-account" title={session.account.email}>
+              <span className="avatar">{initial}</span>
+              <span className="who-text">
+                <strong className="who-name">{whoName}</strong>
+                {session.account.role === 'admin' && <span className="who-role">Owner</span>}
+              </span>
+            </div>
+          )}
+          {(session.protected || session.account) && (
+            <button className="side-signout" onClick={signOut} disabled={Boolean(busy)} title="Sign out">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" />
+                <path d="M10 17l5-5-5-5" />
+                <path d="M15 12H3" />
+              </svg>
+              <span>Sign out</span>
+            </button>
+          )}
         </div>
       </aside>
 
@@ -748,22 +804,6 @@ export default function App() {
           <div className="appbar-title">
             <h1>{title}</h1>
             <p className="subtitle">{subtitle}</p>
-          </div>
-          <div className="appbar-right">
-            {session.account && (
-              <span className="who" title={session.account.email}>
-                <span className="avatar">{initial}</span>
-                <span className="who-text">
-                  {whoName}
-                  {session.account.role === 'admin' ? ' (owner)' : ''}
-                </span>
-              </span>
-            )}
-            {(session.protected || session.account) && (
-              <button className="nav" onClick={signOut} disabled={Boolean(busy)}>
-                Sign out
-              </button>
-            )}
           </div>
         </header>
 
@@ -833,6 +873,7 @@ export default function App() {
         ) : view === 'history' ? (
           <HistoryView
             products={history}
+            productTypes={settings?.productTypes}
             onOpen={openFromHistory}
             onRefresh={refreshHistory}
             onDelete={handleDelete}
@@ -890,6 +931,8 @@ export default function App() {
                 productTypes={settings?.productTypes}
                 productType={productType}
                 onProductType={setProductType}
+                productInfo={productInfo}
+                onProductInfo={setProductInfo}
                 onCreate={handleCreate}
                 etsyConnected={Boolean(etsy?.enabled && etsy?.connected)}
                 onCreateToDraft={handleCreateToDraft}

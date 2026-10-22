@@ -50,7 +50,7 @@ function guideQuality(provider, model, skipped, file1Text) {
  * for the niche: the ones the seller ticked when they ticked any, otherwise the
  * ones the autocomplete lookup returned. The finished fields then get scored.
  */
-export async function generateListingText(productName, picked = []) {
+export async function generateListingText(productName, picked = [], info = null) {
   let lastIssues = [];
   const brand = await brandName();
   const live = picked.length ? null : await buyerQueries(productName);
@@ -60,7 +60,7 @@ export async function generateListingText(productName, picked = []) {
     : { ...live, picked: [] };
 
   for (let attempt = 1; attempt <= MAX_TEXT_ATTEMPTS; attempt += 1) {
-    const { json: raw, provider, model, skipped } = await callTextModel(productName, brand, keywords.terms);
+    const { json: raw, provider, model, skipped } = await callTextModel(productName, brand, keywords.terms, info);
     const shape = normalizeShape(raw, { allow: [brand] });
     const cleaned = cleanFileOne(shape.file1_text);
     const repaired = repairSeo({ ...shape, file1_text: cleaned.text });

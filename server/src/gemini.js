@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { requireKey, resolveModel } from './apikeys.js';
 import { buildSystemPrompt } from './masterPrompt.js';
+import { productBrief } from './productBrief.js';
 import { extractJson } from './jsonparse.js';
 import { withRetry } from './retry.js';
 
@@ -43,7 +44,7 @@ function friendlyError(error, model) {
 }
 
 /** Calls a Gemini text model with the master prompt and returns the parsed package JSON. */
-export async function callGeminiText(productName, brand, keywords, modelOverride) {
+export async function callGeminiText(productName, brand, keywords, modelOverride, info) {
   const apiKey = await requireKey('gemini');
   const model = modelOverride || (await resolveModel('gemini'));
 
@@ -53,7 +54,7 @@ export async function callGeminiText(productName, brand, keywords, modelOverride
     response = await withRetry(async () => {
       const result = await ai.models.generateContent({
         model,
-        contents: `Create the complete listing package for: ${productName}`,
+        contents: `Create the complete listing package for: ${productName}${productBrief(info)}`,
         config: {
           systemInstruction: buildSystemPrompt(productName, brand, keywords),
           responseMimeType: 'application/json',
