@@ -57,7 +57,7 @@ export async function callGeminiText(productName, brand, keywords, modelOverride
         model,
         contents: buildListingUserMessage({ productName, keywords, details: productBrief(info).trim(), ...payload }),
         config: {
-          systemInstruction: buildSystemPrompt(productName, brand, keywords),
+          systemInstruction: await buildSystemPrompt(productName, brand, keywords),
           responseMimeType: 'application/json',
           responseSchema: LISTING_SCHEMA,
           temperature: 0.7,

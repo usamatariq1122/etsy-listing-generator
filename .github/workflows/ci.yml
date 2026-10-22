@@ -21,6 +21,12 @@ jobs:
       - name: Install server dependencies
         run: npm ci --prefix server
 
+      - name: Create the git-ignored copies the app imports
+        # masterPrompt.js, rules.js and prompts/wording.js are generated from the
+        # example files and never committed, so a checkout has to build them
+        # before anything can import them.
+        run: npm run setup --prefix server
+
       - name: Run server tests
         run: npm test --prefix server
 

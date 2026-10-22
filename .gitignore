@@ -6,13 +6,16 @@ client/dist/
 .netlify/
 *.log
 
-# The shop's own wording. The repo ships masterPrompt.example.js and
-# rules.example.js; `npm run setup` copies them and you edit the copies, which
-# git never sees.
+# The shop's own wording. The repo ships masterPrompt.example.js,
+# rules.example.js and prompts/wording.example.js; `npm run setup` copies them
+# and you edit the copies, which git never sees.
 server/src/masterPrompt.js
 server/src/rules.js
-# The locked listing brief is a server-only constant, never shipped or returned.
-server/src/prompts/listing.js
+# The listing brief itself, as data. The repo keeps only the mechanics that read
+# it, so the wording is never in git - a deployment loads it from Netlify Blobs.
+server/src/prompts/wording.js
+# Where `npm run export:prompt` writes the text to upload to that blob store.
+server/tmp/
 
 # Local scratch
 server/create.json

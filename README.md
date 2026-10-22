@@ -28,9 +28,10 @@ by hand — no MySQL, no XAMPP.
    ```
 
 2. **Create your local files.** From the `server` folder run `npm run setup`. It copies
-   `.env.example` to `.env`, and `src/masterPrompt.example.js` / `src/rules.example.js` to
-   `src/masterPrompt.js` / `src/rules.js`. It never overwrites a file that already exists.
-   Those four are git-ignored on purpose: your keys, your shop's wording and your brand live only
+   `.env.example` to `.env`, `src/masterPrompt.example.js` / `src/rules.example.js` to
+   `src/masterPrompt.js` / `src/rules.js`, and `src/prompts/wording.example.js` to
+   `src/prompts/wording.js`. It never overwrites a file that already exists.
+   Those five are git-ignored on purpose: your keys, your shop's wording and your brand live only
    on your machine. Edit the copies — the `.example` files are the generic starting point.
 
 3. **Add your API key.** Open `server/.env` in a text editor and replace the placeholder:
@@ -182,7 +183,7 @@ so nothing you copy out of the portal can trip a marketplace re-upload rule.
 > too, scrub `result.file2_text` in `server/src/service.js`.
 
 **Mockup prompts** are asked for as 4:3 landscape shots ending in `no text, no logos` (the rule lives in
-`server/src/masterPrompt.js`, which is the only place prompts are specified).
+`server/src/prompts/wording.js`, which is the only place the brief is written).
 
 **One brand, chosen in Settings.** `server/src/brand.js` keeps the brand name in the `settings`
 table (until you save one, the neutral `DEFAULT_BRAND` placeholder is used). It is the only shop
@@ -394,8 +395,12 @@ Etsy portal/
 │       ├── taxonomy.js       Etsy's category tree, flattened and cached for a day
 │       ├── draft.js          the order a digital draft is built in: listing, images, files, type
 │       ├── generate.js       the listing-text job: run it, record the result or the failure
-│       ├── masterPrompt.js   your master prompt + the JSON output contract (git-ignored)
+│       ├── masterPrompt.js   the re-export the providers import (git-ignored)
 │       ├── masterPrompt.example.js  generic stand-in that `npm run setup` copies
+│       ├── prompts/
+│       │   ├── listing.js    the brief's mechanics: tokens, keywords, blob lookup
+│       │   ├── wording.js    the shop's own listing brief (git-ignored)
+│       │   └── wording.example.js  generic stand-in that `npm run setup` copies
 │       ├── rules.js          banned word, branding, image rules (git-ignored)
 │       ├── rules.example.js  generic stand-in that `npm run setup` copies
 │       ├── keywords.js       live buyer queries + the keyword cache
@@ -671,11 +676,14 @@ What changes when it is hosted:
 - **Uploads are capped near 4 MB**, image or PDF, because one Function invocation cannot carry the
   25 MB a local disk accepts. Compress the file, or run the portal on your own machine for
   full-resolution files.
-- **The private files stay private.** `masterPrompt.js`, `rules.js` and `.env` are git-ignored, so a
-  cloned or hosted build gets the generic `*.example.js` copies that `npm run setup` writes during the
-  build. Edit your own wording locally; publish only the tool. A deployment built from this public
-  repository therefore writes listings from the generic example prompt, so give the hosted site your
-  own `masterPrompt.js` and `rules.js` (private repo, or uploaded into the deploy) before relying on it.
+- **The private files stay private.** `masterPrompt.js`, `rules.js`, `prompts/wording.js` and `.env` are
+  git-ignored, so a cloned or hosted build gets the generic `*.example.js` copies that `npm run setup`
+  writes during the build. Edit your own wording locally; publish only the tool.
+- **A deployment reads your brief from Blobs, not from git.** On a hosted build the listing brief comes
+  from the `listora-locked` blob store under the key `listing-wording`, so this public repository can
+  carry the tool without carrying your wording. Install it once with
+  `npm run export:prompt --prefix server` and the `netlify blobs:set` command that prints; until it is
+  installed, generation says the brief is not installed rather than writing listings from the stand-in.
 - **Brand and keys are per-database.** A fresh deployment has the neutral placeholder brand and no
   keys; set them once in the deployed Settings and they are stored in that deployment's database.
   Your local Postgres rows never travel to the site, and the git repository never sees any of them.

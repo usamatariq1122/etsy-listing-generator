@@ -69,7 +69,7 @@ export async function callOpenRouterText(productName, brand, keywords, modelOver
           temperature: 0.7,
           max_tokens: 8000,
           messages: [
-            { role: 'system', content: buildSystemPrompt(productName, brand, keywords) },
+            { role: 'system', content: await buildSystemPrompt(productName, brand, keywords) },
             { role: 'user', content: `${buildListingUserMessage({ productName, keywords, details: productBrief(info).trim(), ...payload })}\n\nReply with the JSON object only.` },
           ],
         }),

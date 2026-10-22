@@ -18,7 +18,7 @@ export async function callClaude(productName, brand, keywords, info, payload = {
     model,
     max_tokens: 8000,
     temperature: 0.7,
-    system: buildSystemPrompt(productName, brand, keywords),
+    system: await buildSystemPrompt(productName, brand, keywords),
     messages: [
       {
         role: 'user',

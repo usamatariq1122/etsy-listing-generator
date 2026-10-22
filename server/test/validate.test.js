@@ -1,6 +1,20 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import {
+
+// rules.js is git-ignored: the repository only carries a generic stand-in, so a
+// fresh clone has a different banned word and a different list of retired shop
+// names than this shop does. The two scrubbing assertions below depend on that
+// list, so rules are stood up here and validate is imported after them - the
+// checks then test the scrubber, whatever the owner's own file happens to say.
+mock.module('../src/rules.js', {
+  namedExports: {
+    BANNED_WORD: 'Etsy',
+    BANNED_WORD_RE: /etsy/gi,
+    LEGACY_BRANDS: ['oldshopname'],
+  },
+});
+
+const {
   cleanFileOne,
   validateFileOne,
   validateFileTwo,
@@ -15,7 +29,7 @@ import {
   applyBrandLicense,
   scrubBannedWord,
   countBannedWord,
-} from '../src/validate.js';
+} = await import('../src/validate.js');
 
 const longBody = 'x'.repeat(500);
 
@@ -66,8 +80,8 @@ test('validateFileTwo: empty, short and fine', () => {
 });
 
 test('scrubBranding removes legacy and foreign shop names, keeps the configured single-word brand', () => {
-  assert.ok(!/pixelmaximus/i.test(scrubBranding('Made by PixelMaximus with love')));
-  assert.equal(scrubBranding('Buy at pixelmaximus shop today'), 'Buy at my shop today');
+  assert.ok(!/oldshopname/i.test(scrubBranding('Made by OldShopName with love')));
+  assert.equal(scrubBranding('Buy at oldshopname shop today'), 'Buy at my shop today');
   assert.ok(!/UnknownBrand/.test(scrubBranding('Created by UnknownBrand studio')));
   assert.equal(scrubBranding('Made by Willow, the best', { allow: ['willow'] }), 'Made by Willow, the best');
   assert.equal(scrubBranding('Visit Willow shop', { allow: ['willow'] }), 'Visit Willow shop');

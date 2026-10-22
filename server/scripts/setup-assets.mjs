@@ -9,7 +9,7 @@ const COPIES = [
   ['.env.example', '.env'],
   ['src/masterPrompt.example.js', 'src/masterPrompt.js'],
   ['src/rules.example.js', 'src/rules.js'],
-  ['src/prompts/listing.example.js', 'src/prompts/listing.js'],
+  ['src/prompts/wording.example.js', 'src/prompts/wording.js'],
 ];
 
 // On a hosted build there is no .env to edit: keys arrive as platform secrets

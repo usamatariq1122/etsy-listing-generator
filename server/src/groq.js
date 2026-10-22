@@ -56,7 +56,7 @@ export async function callGroqText(productName, brand, keywords, modelOverride, 
           max_tokens: 8000,
           response_format: { type: 'json_object' },
           messages: [
-            { role: 'system', content: buildSystemPrompt(productName, brand, keywords) },
+            { role: 'system', content: await buildSystemPrompt(productName, brand, keywords) },
             { role: 'user', content: buildListingUserMessage({ productName, keywords, details: productBrief(info).trim(), ...payload }) },
           ],
         }),
