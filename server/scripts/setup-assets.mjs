@@ -1,5 +1,5 @@
-// One-time setup for a fresh clone: creates the three files the app loads but
-// the repository never carries - your keys and your own prompt/rules wording.
+// One-time setup for a fresh clone: creates the files the app loads but the
+// repository never carries - your keys and your own prompt/rules wording.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,7 @@ const COPIES = [
   ['.env.example', '.env'],
   ['src/masterPrompt.example.js', 'src/masterPrompt.js'],
   ['src/rules.example.js', 'src/rules.js'],
+  ['src/prompts/listing.example.js', 'src/prompts/listing.js'],
 ];
 
 // On a hosted build there is no .env to edit: keys arrive as platform secrets
