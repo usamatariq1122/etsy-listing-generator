@@ -103,9 +103,9 @@ body::before {
    sidebar footer. The chevron collapses the rail to icons; both stay hidden
    from the mobile drawer, which always shows full labels. */
 .side-collapse {
-  margin-left: auto; width: 30px; height: 30px; flex: 0 0 30px;
+  margin-left: auto; width: 30px; height: 30px; flex: 0 0 30px; display: grid; place-items: center; padding: 0;
   border: 1px solid var(--line); border-radius: var(--radius-sm);
-  background: var(--glass); color: var(--muted); cursor: pointer; place-items: center;
+  background: var(--glass); color: var(--muted); cursor: pointer;
 }
 .side-collapse:hover { color: var(--ink); background: var(--glass-strong); }
 .side-collapse svg { width: 18px; height: 18px; }
@@ -141,13 +141,15 @@ body::before {
    layout collapses to a single column. */
 .nav-toggle, .nav-close, .nav-scrim { display: none; }
 .nav-toggle {
-  flex: 0 0 auto; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: var(--radius-sm);
-  background: var(--glass); color: var(--ink); cursor: pointer; place-items: center;
+  flex: 0 0 auto; width: 40px; height: 40px; place-items: center; padding: 0;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--glass); color: var(--ink); cursor: pointer;
 }
 .nav-toggle svg, .nav-close svg { width: 22px; height: 22px; }
 .nav-close {
-  margin-left: auto; width: 36px; height: 36px; border: 0; background: none; color: var(--muted);
-  cursor: pointer; place-items: center; border-radius: var(--radius-sm);
+  margin-left: auto; width: 36px; height: 36px; place-items: center; padding: 0;
+  border: 0; background: none; color: var(--muted);
+  cursor: pointer; border-radius: var(--radius-sm);
 }
 .nav-close:hover { color: var(--ink); background: var(--glass); }
 .nav-scrim {
