@@ -11,6 +11,8 @@ client/dist/
 # git never sees.
 server/src/masterPrompt.js
 server/src/rules.js
+# The locked listing brief is a server-only constant, never shipped or returned.
+server/src/prompts/listing.js
 
 # Local scratch
 server/create.json

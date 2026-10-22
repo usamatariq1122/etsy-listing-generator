@@ -1,5 +1,6 @@
 import { config } from './config.js';
 import { buildSystemPrompt } from './masterPrompt.js';
+import { buildListingUserMessage } from './prompts/listing.js';
 import { productBrief } from './productBrief.js';
 import { extractJson } from './jsonparse.js';
 import { withRetry } from './retry.js';
@@ -48,7 +49,7 @@ function friendlyError(error, model) {
  * sent: the gateway routes to many models and not every one supports it, so the
  * answer is read back out of whatever the model wraps the JSON in.
  */
-export async function callOpenRouterText(productName, brand, keywords, modelOverride, info) {
+export async function callOpenRouterText(productName, brand, keywords, modelOverride, info, payload = {}) {
   const apiKey = await requireKey('openrouter');
   const model = modelOverride || (await resolveModel('openrouter'));
 
@@ -69,7 +70,7 @@ export async function callOpenRouterText(productName, brand, keywords, modelOver
           max_tokens: 8000,
           messages: [
             { role: 'system', content: buildSystemPrompt(productName, brand, keywords) },
-            { role: 'user', content: `Create the complete listing package for: ${productName}${productBrief(info)}. Reply with the JSON object only.` },
+            { role: 'user', content: `${buildListingUserMessage({ productName, keywords, details: productBrief(info).trim(), ...payload })}\n\nReply with the JSON object only.` },
           ],
         }),
       });

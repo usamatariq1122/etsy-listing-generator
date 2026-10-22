@@ -21,6 +21,11 @@ const readyFacts = () => ({
   categoryResolvable: true,
   briefProvided: true,
   seoCheck: { score: 83 },
+  patternText: 'A full pattern description.',
+  realPhotoUploaded: true,
+  commercialLicense: false,
+  imagePrompts: [],
+  file2Text: 'A full pattern description.\nDesigned by Willow.\nCreated with AI assistance; the pattern itself is the seller\'s own tested design.',
 });
 
 test('a complete, connected listing is ready with no errors', () => {
@@ -60,12 +65,35 @@ test('a tag over 20 characters is an error, a short tag list is only a warning',
   assert.ok(v.errors.some((error) => error.section === 'seo' && /20 characters/.test(error.message)));
 });
 
-test('no tags is a warning, not a block', () => {
+test('too few tags is now a block: Etsy wants exactly thirteen', () => {
   const facts = readyFacts();
   facts.listing.tags = [];
   const v = assessListing(facts);
-  assert.equal(v.ready, true);
-  assert.ok(v.warnings.some((warning) => /search tags/i.test(warning.message)));
+  assert.equal(v.ready, false);
+  assert.ok(v.errors.some((error) => error.section === 'seo' && /exactly 13 tags/i.test(error.message)));
+});
+
+test('a missing attribution or AI-disclosure line blocks the draft', () => {
+  const v = assessListing({ ...readyFacts(), file2Text: 'Just a description, no disclosure here.' });
+  assert.equal(v.ready, false);
+  assert.ok(v.errors.some((error) => /Designed by/i.test(error.message)));
+  assert.ok(v.errors.some((error) => /AI-disclosure/i.test(error.message)));
+});
+
+test('a number in the listing that is not in the pattern blocks the draft', () => {
+  const v = assessListing({
+    ...readyFacts(),
+    patternText: 'A full pattern description.',
+    file2Text: 'Designed by Willow. Created with AI assistance. This 18cm tall make uses a 5mm hook.',
+  });
+  assert.equal(v.ready, false);
+  assert.ok(v.errors.some((error) => /numbers not in your pattern/i.test(error.message)));
+});
+
+test('an image prompt carrying the marketplace name blocks the draft', () => {
+  const v = assessListing({ ...readyFacts(), imagePrompts: ['a soft Etsy-style flat lay of the finished item'] });
+  assert.equal(v.ready, false);
+  assert.ok(v.errors.some((error) => error.section === 'images' && /marketplace name/i.test(error.message)));
 });
 
 test('a disconnected shop blocks the draft; a category needing review is only a warning', () => {

@@ -3,26 +3,21 @@ import SettingsView from './SettingsView.jsx';
 import { providerLabel } from '../labels.js';
 
 // Everything a first run does not need, now on its own Settings screen reached
-// from the sidebar: the SEO keyword tick list, the brand, the PDF colours, the
-// Etsy shop defaults, the listing prompts and the password. The model and its
-// access keys live on their own "Keys" tab.
+// from the sidebar: the SEO keyword tick list, the brand, the PDF colours and the
+// Etsy shop defaults. The model and its access keys live on their own "Keys" tab,
+// and the portal password opens from the sidebar chip.
 export default function AdvancedPanel({
   productName,
   busy,
   picked,
   onPicked,
   settings,
-  prompts,
-  canManagePrompts,
   etsy,
   canManageEtsy,
   onSaveBrand,
   onSaveTheme,
   onRemoveTheme,
-  onSavePrompt,
-  onRemovePrompt,
   onSaveEtsyDefaults,
-  onChangePassword,
 }) {
   const selected = settings?.selected || {};
   const meta = [
@@ -44,22 +39,17 @@ export default function AdvancedPanel({
       </p>
       <KeywordPicker productName={productName} busy={busy} picked={picked} onPicked={onPicked} />
 
-      <h3>Brand, colours, prompts and access</h3>
+      <h3>Brand, colours and shop defaults</h3>
       {settings ? (
         <SettingsView
           settings={settings}
           busy={busy}
-          prompts={prompts}
-          canManagePrompts={canManagePrompts}
           etsy={etsy}
           canManageEtsy={canManageEtsy}
           onSaveBrand={onSaveBrand}
           onSaveTheme={onSaveTheme}
           onRemoveTheme={onRemoveTheme}
-          onSavePrompt={onSavePrompt}
-          onRemovePrompt={onRemovePrompt}
           onSaveEtsyDefaults={onSaveEtsyDefaults}
-          onChangePassword={onChangePassword}
         />
       ) : (
         <p className="muted small">Loading settings…</p>

@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { requireKey, resolveModel } from './apikeys.js';
 import { buildSystemPrompt } from './masterPrompt.js';
+import { buildListingUserMessage } from './prompts/listing.js';
 import { productBrief } from './productBrief.js';
 import { extractJson } from './jsonparse.js';
 
@@ -8,7 +9,7 @@ import { extractJson } from './jsonparse.js';
  * Calls Claude (Anthropic) for one listing package. The assistant turn is
  * prefilled with "{" so the model has to continue with JSON.
  */
-export async function callClaude(productName, brand, keywords, info) {
+export async function callClaude(productName, brand, keywords, info, payload = {}) {
   const apiKey = await requireKey('anthropic');
   const model = await resolveModel('anthropic');
 
@@ -21,7 +22,7 @@ export async function callClaude(productName, brand, keywords, info) {
     messages: [
       {
         role: 'user',
-        content: `Create the complete listing package for: ${productName}${productBrief(info)}`,
+        content: buildListingUserMessage({ productName, keywords, details: productBrief(info).trim(), ...payload }),
       },
       { role: 'assistant', content: '{' },
     ],

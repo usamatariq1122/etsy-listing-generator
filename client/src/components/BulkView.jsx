@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, waitForText } from '../api.js';
 
-const SAMPLE = 'product_name,keywords\nCrochet bucket hat,yarn; summer hat\nMacrame wall hanging,boho decor';
+const SAMPLE = 'product_name,keywords,pattern\nCrochet bucket hat,yarn; summer hat,"Round brim, single crochet, 6mm hook, DK yarn…"\nMacrame wall hanging,boho decor,"8mm cotton rope, square knot pattern, 60cm wide…"';
 
 const LABEL = {
   queued: 'Not started',
@@ -13,6 +13,7 @@ const LABEL = {
 export default function BulkView({ onNotice, onOpenProduct }) {
   const [csv, setCsv] = useState(SAMPLE);
   const [name, setName] = useState('');
+  const [originalConfirmed, setOriginalConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
@@ -45,7 +46,7 @@ export default function BulkView({ onNotice, onOpenProduct }) {
     setBusy(true);
     setError('');
     try {
-      const data = await api.createBulk(name || 'Bulk batch', csv);
+      const data = await api.createBulk(name || 'Bulk batch', csv, originalConfirmed);
       setJob(data.job);
       setRows(data.rows);
       setStatus(`${data.job.rows} listings created${data.job.skipped ? `, ${data.job.skipped} rows skipped` : ''}. Generate them below or with “Generate all”.`);
@@ -125,10 +126,11 @@ export default function BulkView({ onNotice, onOpenProduct }) {
       <section className="card">
         <h2>Bulk CSV</h2>
         <p className="muted small">
-          One product name per row — a header line with <code>product_name</code> and an optional
-          <code> keywords</code> column, or just the names. A batch is capped at 50 listings. Each row is
-          then written by the same generator the studio uses, one at a time, so it never spends more model
-          quota than clicking through them would.
+          One product name per row, plus a <code>pattern</code> column holding your own pattern or product
+          content for each — the listing is written around it. A header line names the columns
+          (<code>product_name</code>, optional <code>keywords</code>, <code>pattern</code>). A batch is capped at
+          50 listings. Each row is then written by the same generator the studio uses, one at a time, so it never
+          spends more model quota than clicking through them would.
         </p>
         <label className="field">
           <span>Batch name (optional)</span>
@@ -138,8 +140,12 @@ export default function BulkView({ onNotice, onOpenProduct }) {
           <span>CSV</span>
           <textarea className="desc-editor" rows={6} value={csv} spellCheck={false} onChange={(e) => setCsv(e.target.value)} disabled={busy} />
         </label>
+        <label className="field checkbox required">
+          <input type="checkbox" checked={originalConfirmed} onChange={(e) => setOriginalConfirmed(e.target.checked)} disabled={busy} />
+          <span>Every pattern in this batch is my own original, tested design</span>
+        </label>
         <div className="row">
-          <button className="primary" onClick={create} disabled={busy || !csv.trim()}>
+          <button className="primary" onClick={create} disabled={busy || !csv.trim() || !originalConfirmed}>
             Create batch
           </button>
         </div>

@@ -151,14 +151,16 @@ export default function UploadSlots({ product, busy, onUpload, onRemove, onGener
                     <p className="muted small">
                       {image
                         ? `${image.width} × ${image.height}px · ${(image.bytes / MB).toFixed(1)} MB · packed as ${image.fileName}`
-                        : 'Nothing uploaded yet.'}
+                        : slot.uploadOnly
+                          ? 'Upload a real photo of your actual item.'
+                          : 'Nothing uploaded yet.'}
                       {image?.source === 'generate' && ' · generated, not a real photo'}
                       {working === slot.id && (fixes[slot.id] ? ' Fitting the image…' : ' Checking size and shape…')}
                       {generating === slot.id && ' Drawing the image…'}
                     </p>
                   </div>
                   <div className="row">
-                    {prompt && onGenerate && (
+                    {prompt && onGenerate && !slot.uploadOnly && (
                       <button
                         className="small"
                         onClick={() => generate(slot)}

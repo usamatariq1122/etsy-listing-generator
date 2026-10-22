@@ -242,6 +242,14 @@ export async function initDb() {
     )
   `);
   await ddl('ALTER TABLE products ADD COLUMN IF NOT EXISTS product_type VARCHAR(32)');
+  // The seller's own pattern is now the source of the guide: it is stored, along
+  // with the originality confirmation, the licence choice and how the text is
+  // handled. pattern_formatted holds the model's re-typeset version when asked.
+  await ddl('ALTER TABLE products ADD COLUMN IF NOT EXISTS pattern_text TEXT');
+  await ddl('ALTER TABLE products ADD COLUMN IF NOT EXISTS pattern_formatted TEXT');
+  await ddl('ALTER TABLE products ADD COLUMN IF NOT EXISTS original_confirmed BOOLEAN NOT NULL DEFAULT FALSE');
+  await ddl('ALTER TABLE products ADD COLUMN IF NOT EXISTS commercial_license BOOLEAN NOT NULL DEFAULT FALSE');
+  await ddl(`ALTER TABLE products ADD COLUMN IF NOT EXISTS format_mode VARCHAR(16) NOT NULL DEFAULT 'none'`);
 }
 
 export async function getSetting(key) {
@@ -289,10 +297,20 @@ function hydrate(row) {
   };
 }
 
-export async function createProduct({ id, productName, keywords = [], status = 'created', userId = null, productType = null, productInfo = null }) {
+export async function createProduct({
+  id, productName, keywords = [], status = 'created', userId = null, productType = null, productInfo = null,
+  patternText = null, originalConfirmed = false, commercialLicense = false, formatMode = 'none',
+}) {
   await query(
-    'INSERT INTO products (id, product_name, selected_keywords, status, user_id, product_type, product_info) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [id, productName, JSON.stringify(keywords), status, userId, productType, productInfo ? JSON.stringify(productInfo) : null],
+    `INSERT INTO products (id, product_name, selected_keywords, status, user_id, product_type, product_info,
+        pattern_text, original_confirmed, commercial_license, format_mode)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id, productName, JSON.stringify(keywords), status, userId, productType,
+      productInfo ? JSON.stringify(productInfo) : null,
+      patternText, Boolean(originalConfirmed), Boolean(commercialLicense),
+      formatMode === 'format_only' ? 'format_only' : 'none',
+    ],
   );
   return getProduct(id);
 }
@@ -330,6 +348,7 @@ export async function updateProduct(id, fields) {
     'product_name', 'selected_keywords', 'file1_text', 'file2_text', 'mockup_prompts',
     'infographic_prompts', 'price', 'zip_name', 'status', 'warnings', 'product_type',
     'etsy_listing_id', 'etsy_draft_url', 'etsy_synced_at', 'product_info', 'etsy_draft_state',
+    'pattern_text', 'pattern_formatted', 'original_confirmed', 'commercial_license', 'format_mode',
   ];
   const entries = Object.entries(fields).filter(([key]) => allowed.includes(key));
   if (!entries.length) return getProduct(id);

@@ -108,6 +108,8 @@ const FILE2 = [
   '3. Description:',
   'This crochet hat pattern is a beginner friendly PDF with step by step photos.',
   'Make a warm winter beanie in an afternoon using only basic stitches and worsted yarn.',
+  'Designed by TestShop.',
+  "Created with AI assistance; the pattern itself is the seller's own tested design.",
 ].join('\n');
 
 // Long enough to clear the thin-guide check, clean of brackets/urls/banned word.
@@ -125,6 +127,7 @@ const product = (over = {}) => ({
   warnings: {},
   file1_text: FILE1,
   file2_text: FILE2,
+  pattern_text: 'Steps 1 to 12, worked in 3 rounds with 2 skeins over 13 rows. Basic stitches only.',
   price: 5,
   zip_name: null,
   etsy_listing_id: null,
@@ -150,7 +153,7 @@ const validation = async () => {
 };
 
 test('the route returns the backend verdict for a complete listing', async () => {
-  images = [{ id: 'i1' }, { id: 'i2' }, { id: 'i3' }, { id: 'i4' }];
+  images = [{ id: 'i1', slot_id: 'real_photo', source: 'upload' }, { id: 'i2' }, { id: 'i3' }, { id: 'i4' }];
   documents = [{ name: 'product-content.pdf' }, { name: 'listing-seo-package.pdf' }];
   shop = { enabled: true, connected: true, shopName: 'TestShop' };
   defaults = { category: 'Crochet', quantity: '10', whoMade: 'i_did', whenMade: '2020_2026' };

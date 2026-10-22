@@ -1,56 +1,6 @@
 import { useEffect, useState } from 'react';
 import { WHO_LABELS, whenLabel } from './EtsyPanel.jsx';
 
-function PasswordRow({ onChange, busy, configured }) {
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [repeat, setRepeat] = useState('');
-  const [error, setError] = useState('');
-
-  function submit(event) {
-    event.preventDefault();
-    if (configured && !current) return setError('Enter your current password.');
-    if (next.length < 8) return setError('The password needs at least 8 characters.');
-    if (next !== repeat) return setError('Both entries must match.');
-    setError('');
-    onChange(current, next);
-    setCurrent('');
-    setNext('');
-    setRepeat('');
-  }
-
-  return (
-    <form onSubmit={submit} className="stack">
-      {configured && (
-        <label className="field">
-          <span>Current password</span>
-          <input type="password" value={current} autoComplete="current-password" onChange={(e) => setCurrent(e.target.value)} disabled={Boolean(busy)} />
-        </label>
-      )}
-      <div className="row">
-        <label className="field">
-          <span>{configured ? 'New password' : 'Password'}</span>
-          <input type="password" value={next} autoComplete="new-password" onChange={(e) => setNext(e.target.value)} disabled={Boolean(busy)} />
-        </label>
-        <label className="field">
-          <span>Repeat it</span>
-          <input type="password" value={repeat} autoComplete="new-password" onChange={(e) => setRepeat(e.target.value)} disabled={Boolean(busy)} />
-        </label>
-      </div>
-      {error && <p className="inline-error">{error}</p>}
-      <div className="row">
-        <button
-          type="submit"
-          className="primary"
-          disabled={Boolean(busy) || !next || !repeat || (configured && !current)}
-        >
-          {configured ? 'Change password' : 'Create password'}
-        </button>
-      </div>
-    </form>
-  );
-}
-
 function ThemeCard({ theme, busy, onSave, onRemove }) {
   const DEFAULTS = { ink: '#14293d', accent: '#2f6f8f', muted: '#6b7280', hairline: '#d7dee5' };
   const FIELDS = [
@@ -101,78 +51,6 @@ function ThemeCard({ theme, busy, onSave, onRemove }) {
         These four colours are the whole printed look of both PDFs. Left alone, the portal prints in its
         built-in palette. Fonts and a logo are not editable here, because adding those would mean bundling
         extra files into the server.
-      </p>
-    </section>
-  );
-}
-
-function PromptCard({ types, busy, onSave, onRemove }) {
-  const [value, setValue] = useState(types[0]?.value ?? 'general');
-  const current = types.find((type) => type.value === value) || types[0];
-  const [draft, setDraft] = useState(current?.body ?? '');
-
-  // Re-seed the editor whenever the selected type or its saved wording changes,
-  // so a refresh after saving shows the stored text rather than a stale draft.
-  useEffect(() => {
-    if (current) setDraft(current.body);
-  }, [current?.value, current?.body]);
-
-  if (!current) return null;
-  const dirty = draft !== current.body;
-
-  function submit(event) {
-    event.preventDefault();
-    onSave(current.value, draft);
-  }
-
-  return (
-    <section className="card">
-      <div className="card-head">
-        <h2>Listing prompts</h2>
-        <span className="muted small">the brief the text model writes from</span>
-      </div>
-
-      <label className="field">
-        <span>Product type</span>
-        <select value={current.value} onChange={(e) => setValue(e.target.value)} disabled={Boolean(busy)}>
-          {types.map((type) => (
-            <option key={type.value} value={type.value}>
-              {type.label}
-              {type.customised ? ' (customised)' : ''}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <p className="muted small">
-        Edit what the model is told to write for <strong>{current.label.toLowerCase()}</strong> listings. Keep the
-        <code> {'{{product}}'} </code> and <code> {'{{brand}}'} </code> markers and leave the JSON shape at the end of
-        the file intact, or listings stop parsing. Auto-detect keeps inferring the type from the product name.
-      </p>
-
-      <form onSubmit={submit} className="stack">
-        <textarea
-          className="desc-editor"
-          value={draft}
-          spellCheck={false}
-          rows={18}
-          onChange={(e) => setDraft(e.target.value)}
-          disabled={Boolean(busy)}
-        />
-        <div className="row">
-          <button type="submit" className="primary" disabled={Boolean(busy) || !dirty || !draft.trim()}>
-            Save prompt
-          </button>
-          {current.customised && (
-            <button type="button" onClick={() => onRemove(current.value)} disabled={Boolean(busy)}>
-              Revert to built-in
-            </button>
-          )}
-        </div>
-      </form>
-      <p className="muted small">
-        The output format and keyword handling are added around this text by the app and cannot be edited here, so a
-        saved prompt always still produces a valid listing. Reverting restores the built-in brief exactly.
       </p>
     </section>
   );
@@ -277,14 +155,13 @@ function EtsyDefaultsCard({ etsy, busy, canManage, onSave }) {
   );
 }
 
-export default function SettingsView({ settings, busy, prompts, canManagePrompts, etsy, canManageEtsy, onSaveBrand, onSaveTheme, onRemoveTheme, onSavePrompt, onRemovePrompt, onSaveEtsyDefaults, onChangePassword }) {
+export default function SettingsView({ settings, busy, etsy, canManageEtsy, onSaveBrand, onSaveTheme, onRemoveTheme, onSaveEtsyDefaults }) {
   const [brandDraft, setBrandDraft] = useState(null);
   const [localError, setLocalError] = useState('');
 
   if (!settings) return <p className="muted">Loading settings…</p>;
 
   const savedBrand = settings.brand || '';
-  const configured = Boolean(settings.passwordSet);
   const brand = brandDraft ?? savedBrand;
   const brandDirty = brand.trim() !== savedBrand && brand.trim().length > 0;
 
@@ -337,24 +214,6 @@ export default function SettingsView({ settings, busy, prompts, canManagePrompts
       {etsy?.enabled && canManageEtsy && (
         <EtsyDefaultsCard etsy={etsy} busy={busy} canManage={canManageEtsy} onSave={onSaveEtsyDefaults} />
       )}
-
-      {canManagePrompts && prompts && prompts.length > 0 && (
-        <PromptCard types={prompts} busy={busy} onSave={onSavePrompt} onRemove={onRemovePrompt} />
-      )}
-
-      <section className="card">
-        <h2>Portal password</h2>
-        <p className="muted small">
-          {configured
-            ? 'Every page and every download needs this password, so nobody else can run up your model limits on your keys. Only a salted hash is stored. Changing it signs out any other browser.'
-            : 'No password yet, so this portal is open to anyone who reaches its address. Once you host it, the first screen you see asks for one - every page and every download then needs it, and only a salted hash is stored.'}
-        </p>
-        {onChangePassword ? (
-          <PasswordRow onChange={onChangePassword} busy={busy} configured={configured} />
-        ) : (
-          <p className="muted small">Loading…</p>
-        )}
-      </section>
     </>
   );
 }

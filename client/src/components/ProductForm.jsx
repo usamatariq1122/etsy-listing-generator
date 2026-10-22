@@ -6,7 +6,9 @@ const SKILL_LEVELS = ['', 'Beginner', 'Confident beginner', 'Intermediate', 'Adv
 
 export default function ProductForm({
   busy, productName, onProductName, productTypes, productType, onProductType,
-  productInfo = {}, onProductInfo, onCreate, etsyConnected, onCreateToDraft,
+  productInfo = {}, onProductInfo, patternText = '', onPatternText,
+  originalConfirmed = false, onOriginalConfirmed, commercialLicense = false, onCommercialLicense,
+  formatMode = 'none', onFormatMode, onCreate, etsyConnected, onCreateToDraft,
 }) {
   const [localError, setLocalError] = useState('');
   const types = productTypes?.length ? productTypes : AUTO;
@@ -20,6 +22,14 @@ export default function ProductForm({
     event.preventDefault();
     if (productName.trim().length < 3) {
       setLocalError('Enter a product name or niche, for example "Crochet dragon pattern".');
+      return;
+    }
+    if (!patternText.trim()) {
+      setLocalError('Paste your pattern or product content — the listing is built around it.');
+      return;
+    }
+    if (!originalConfirmed) {
+      setLocalError('Tick that the pattern is your own original, tested design.');
       return;
     }
     setLocalError('');
@@ -56,6 +66,40 @@ export default function ProductForm({
         <p className="muted small">
           Auto-detect lets the model infer the type from the name. Pick a specific type to write from the brief
           you have set for it under Settings.
+        </p>
+
+        <label className="field">
+          <span>Your pattern or product content</span>
+          <textarea
+            rows={10}
+            value={patternText}
+            maxLength={40000}
+            placeholder="Paste the exact pattern or product content the buyer will receive. The listing is written around it; the portal never rewrites your steps or counts."
+            onChange={(e) => onPatternText(e.target.value)}
+            disabled={Boolean(busy)}
+          />
+        </label>
+
+        <label className="field">
+          <span>Pattern handling</span>
+          <select value={formatMode} onChange={(e) => onFormatMode(e.target.value)} disabled={Boolean(busy)}>
+            <option value="none">Use my text as-is</option>
+            <option value="format_only">Only re-format my text (no new steps)</option>
+          </select>
+        </label>
+
+        <label className="field checkbox">
+          <input type="checkbox" checked={commercialLicense} onChange={(e) => onCommercialLicense(e.target.checked)} disabled={Boolean(busy)} />
+          <span>Includes a commercial-use licence</span>
+        </label>
+
+        <label className="field checkbox required">
+          <input type="checkbox" checked={originalConfirmed} onChange={(e) => onOriginalConfirmed(e.target.checked)} disabled={Boolean(busy)} />
+          <span>Pattern is original and tested by me</span>
+        </label>
+        <p className="muted small">
+          Etsy restricts AI-written functional guides such as patterns. Keep this box ticked only when the design is
+          your own and you have tested it; the portal writes the listing, never the pattern.
         </p>
 
         <details className="field product-details">

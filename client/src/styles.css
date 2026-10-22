@@ -20,6 +20,12 @@
   --info-line: rgba(56, 189, 248, 0.4);
   --radius: 18px;
   --radius-sm: 12px;
+  /* Motion: one shared easing curve and a two-step duration ladder so every
+     hover, focus and view change feels like the same portal. */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-fast: 0.16s;
+  --dur: 0.24s;
+  --dur-slow: 0.34s;
 }
 
 * { box-sizing: border-box; }
@@ -89,10 +95,13 @@ body::before {
   display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 14px;
   border: 1px solid transparent; border-radius: var(--radius-sm); background: none;
   color: var(--muted); font-size: 14.5px; font-weight: 600; cursor: pointer;
-  transition: background 0.18s, color 0.18s, border-color 0.18s;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
-.side-item svg { width: 19px; height: 19px; flex: 0 0 19px; }
+.side-item svg { width: 19px; height: 19px; flex: 0 0 19px; transition: transform var(--dur-fast) var(--ease); }
 .side-item:hover { color: var(--ink); background: var(--glass); }
+.side-item:hover svg { transform: translateX(1px); }
+.side-item:active { transform: scale(0.985); }
 .side-item.active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-glow); }
 .side-foot { margin-top: auto; padding: 14px 8px 4px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
 .usage { display: flex; flex-direction: column; gap: 6px; }
@@ -117,18 +126,19 @@ body::before {
   display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 6px;
   padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm);
   background: var(--glass); color: var(--ink); font-size: 14px; font-weight: 600; cursor: pointer;
-  transition: border-color 0.18s, color 0.18s, background 0.18s;
+  transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .side-signout svg { width: 19px; height: 19px; flex: 0 0 19px; }
 .side-signout:hover { color: #fda4af; border-color: var(--accent-glow); }
 
-/* Portal-access status chip: a glanceable lock + Protected/Open that jumps to
-   the Settings control. It reports the state; it never edits the password here. */
+/* Portal-access status chip: a glanceable lock + Protected/Open that opens the
+   Portal access dialog right here in the sidebar, so the password never lives
+   in Settings. */
 .side-access {
   display: flex; align-items: center; gap: 12px; width: 100%;
   padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm);
   background: var(--glass); color: var(--ink); cursor: pointer; text-align: left;
-  transition: border-color 0.18s, background 0.18s;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .side-access:hover { border-color: var(--accent-glow); background: var(--glass-strong); }
 .side-access svg { width: 19px; height: 19px; flex: 0 0 19px; color: var(--muted); }
@@ -137,6 +147,25 @@ body::before {
 .side-access-state { font-size: 13.5px; font-weight: 700; }
 .side-access-state.ok { color: var(--accent); }
 .side-access-state.warn { color: #fcd34d; }
+
+/* Portal-access dialog: opened from the sidebar chip, it holds the one password
+   control. The scrim dims the app; the card reuses the panel surface. */
+.modal-scrim {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+  padding: 20px; background: rgba(4, 8, 10, 0.6); backdrop-filter: blur(2px);
+}
+.modal {
+  width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 22px;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.modal h2 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.pill {
+  padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--line);
+}
+.pill.ok { color: var(--accent); border-color: var(--accent-glow); }
+.pill.warn { color: #fcd34d; }
 
 @media (min-width: 901px) {
   .sidebar.collapsed { flex-basis: 76px; width: 76px; padding: 22px 10px; align-items: stretch; }
@@ -233,9 +262,12 @@ nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .nav {
   border: 1px solid var(--line); background: var(--glass); color: var(--ink);
   padding: 9px 18px; border-radius: 999px; cursor: pointer; font-size: 14px;
-  backdrop-filter: blur(12px) saturate(140%); transition: border-color 0.18s, color 0.18s, background 0.18s;
+  backdrop-filter: blur(12px) saturate(140%);
+  transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
 .nav:hover { border-color: var(--accent-glow); }
+.nav:active { transform: scale(0.97); }
 .nav.active {
   border-color: var(--accent-glow); color: var(--accent); font-weight: 600;
   background: var(--accent-soft);
@@ -260,10 +292,15 @@ nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .field { display: block; border: 0; padding: 0; margin: 0 0 16px; }
 .field.shrink { flex: 0 1 280px; margin-bottom: 0; }
 .field > span, .field > legend { display: block; font-weight: 600; margin-bottom: 6px; font-size: 14px; }
+/* A ticked option sits on one line: the box, then its label beside it. */
+.field.checkbox { display: flex; align-items: center; gap: 8px; }
+.field.checkbox > span { display: inline; font-weight: 500; margin: 0; }
+.field.checkbox > input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.field.checkbox.required > span { font-weight: 600; }
 input[type="text"], input[type="email"], input[type="password"], select {
   width: 100%; padding: 12px 14px; border: 1px solid var(--line);
   border-radius: var(--radius-sm); font-size: 15px; color: var(--ink);
-  background: rgba(255, 255, 255, 0.05); transition: border-color 0.18s, box-shadow 0.18s;
+  background: rgba(255, 255, 255, 0.05); transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 select { appearance: none; background-image: none; cursor: pointer; }
 select option { background: var(--card); color: var(--ink); }
@@ -282,7 +319,7 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focu
 textarea {
   width: 100%; padding: 12px 14px; border: 1px solid var(--line);
   border-radius: var(--radius-sm); font-size: 15px; color: var(--ink); font-family: inherit;
-  background: rgba(255, 255, 255, 0.05); resize: vertical; transition: border-color 0.18s, box-shadow 0.18s;
+  background: rgba(255, 255, 255, 0.05); resize: vertical; transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 textarea::placeholder { color: #6d7b86; }
 textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(16, 201, 138, 0.22); }
@@ -295,9 +332,11 @@ button, .button {
   border: 1px solid var(--line); background: var(--glass-strong); color: var(--ink);
   padding: 10px 18px; border-radius: 999px; cursor: pointer; font-size: 14px;
   text-decoration: none; display: inline-block; font-weight: 600;
-  transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 button:hover:not(:disabled), .button:hover { border-color: var(--accent-glow); }
+button:active:not(:disabled), .button:active { transform: translateY(1px) scale(0.98); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 button.primary, .button.primary {
   background: linear-gradient(120deg, var(--accent), #0a9f6d);
@@ -305,6 +344,7 @@ button.primary, .button.primary {
   box-shadow: 0 10px 26px -10px var(--accent-glow);
 }
 button.primary:hover:not(:disabled), .button.primary:hover { transform: translateY(-1px); box-shadow: 0 14px 30px -10px var(--accent-glow); }
+button.primary:active:not(:disabled), .button.primary:active { transform: translateY(1px) scale(0.985); }
 button.small { padding: 6px 14px; font-size: 13px; }
 button.danger { background: rgba(244, 63, 94, 0.12); border-color: rgba(244, 63, 94, 0.5); color: #fda4af; }
 button.danger:hover:not(:disabled) { background: rgba(244, 63, 94, 0.22); border-color: rgba(244, 63, 94, 0.7); }
@@ -500,7 +540,8 @@ table.manifest td:last-child { white-space: nowrap; }
 /* The simple screen: one name box, one ZIP box, one folded Advanced panel. */
 .zipdrop {
   border: 1px dashed var(--line); border-radius: var(--radius-sm); background: rgba(4, 8, 11, 0.55);
-  padding: 28px 18px; text-align: center; cursor: pointer; transition: border-color 0.18s, background 0.18s;
+  padding: 28px 18px; text-align: center; cursor: pointer;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), transform var(--dur-fast) var(--ease);
 }
 .zipdrop:hover, .zipdrop.over { border-color: var(--accent-glow); background: var(--accent-soft); }
 .zipdrop p { margin: 0; font-size: 14px; }
@@ -596,4 +637,53 @@ table.manifest td:last-child { white-space: nowrap; }
   nav { justify-content: flex-start; }
   .card { padding: 16px; border-radius: var(--radius-sm); }
   .table-scroll table.manifest { min-width: 480px; }
+}
+
+/* ---- Motion polish -------------------------------------------------------
+   The shared easing curve and duration ladder above are applied to the rest of
+   the interactive surface here: state changes on the small controls, a press
+   feel, and a soft entrance whenever a card or a view comes into being (a nav
+   switch mounts fresh cards, so they ease in rather than pop). One guard at the
+   bottom turns it all off for anyone who asks for reduced motion. */
+.radio, .side-collapse, .nav-close, .side-signout svg, .side-access svg {
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.side-collapse:hover, .nav-close:hover { transform: scale(1.04); }
+.linklike, .download { transition: color var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease); }
+.linklike:hover { opacity: 0.82; }
+.pill, .chips li { transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.tick { transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.tick:hover { transform: translateY(-1px); }
+.tick:active { transform: scale(0.99); }
+.slot, .staged-row { transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.slot.filled { box-shadow: 0 0 0 1px var(--ok-line) inset; }
+table.manifest tbody tr { transition: background var(--dur-fast) var(--ease); }
+.usage-bar i { transition: width var(--dur-slow) var(--ease); }
+.banner, .inline-note, .inline-error, .validation-banner { animation: rise var(--dur) var(--ease) both; }
+
+/* A card easing into place: fires when a view change mounts a new card, not on
+   ordinary re-renders of a card that is already on screen. */
+.card { animation: rise var(--dur-slow) var(--ease) both; }
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Dialogs and the mobile drawer: the scrim fades, the card scales up gently. */
+.modal-scrim { animation: fade var(--dur) var(--ease) both; }
+.modal { animation: pop var(--dur) var(--ease) both; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

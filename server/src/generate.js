@@ -41,6 +41,23 @@ async function generate(id) {
   // or unowned listing generates exactly as it did before templates existed.
   setPromptBody(await templateBody(product.product_type));
 
+  // Hard gate before the model is ever asked: no pattern, or no original
+  // confirmation, and generation is refused with the reason on the product.
+  if (!String(product.pattern_text ?? '').trim()) {
+    await updateProduct(id, {
+      status: 'failed',
+      warnings: { ...(product.warnings || {}), error: 'Paste the pattern or product content first.', issues: [], status: 400 },
+    });
+    return null;
+  }
+  if (product.original_confirmed !== true) {
+    await updateProduct(id, {
+      status: 'failed',
+      warnings: { ...(product.warnings || {}), error: 'Confirm the pattern is your own original, tested design.', issues: [], status: 400 },
+    });
+    return null;
+  }
+
   const owner = ownerOf(id);
   if (owner) {
     // Stop a generation the account has not earned a slot for, before the text
@@ -63,15 +80,21 @@ async function generate(id) {
       product.product_name,
       product.selected_keywords || [],
       product.product_info || {},
+      {
+        patternText: product.pattern_text,
+        commercialLicense: Boolean(product.commercial_license),
+        formatMode: product.format_mode ?? 'none',
+      },
     );
-    // A short guide or a lite-model answer is flagged before anything is
-    // printed, so no PDF appears as if nothing were wrong.
+    // A lite-model answer is flagged before anything is printed, so no PDF
+    // appears as if nothing were wrong.
     if (!quality.notes.length) await writeDocuments({ id, product_name: product.product_name, ...result });
     else await removeDocuments({ id });
 
     return await updateProduct(id, {
-      file1_text: result.file1_text,
+      file1_text: result.file1_text,           // the assembled guide (from the pattern), never a new AI pattern
       file2_text: result.file2_text,
+      pattern_formatted: result.pattern_formatted || null,
       mockup_prompts: result.mockup_prompts,
       infographic_prompts: result.infographic_prompts,
       status: 'text',

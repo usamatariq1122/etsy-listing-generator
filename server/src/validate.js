@@ -286,8 +286,11 @@ export function normalizeShape(raw, { allow = [] } = {}) {
   const promptList = (value) =>
     Array.isArray(value) ? value.map((v) => scrubBannedWord(text(v)).text.trim()).filter(Boolean) : [];
   return {
-    file1_text: text(raw?.file1_text),
+    // The guide is not model output any more; callers fill file1_text from the
+    // seller's pattern. The model returns pattern_formatted only in format_only.
+    file1_text: '',
     file2_text: text(raw?.file2_text),
+    pattern_formatted: text(raw?.pattern_formatted),
     seo_title: text(raw?.seo_title).trim(),
     seo_tags: list(raw?.seo_tags),
     mockup_prompts: promptList(raw?.mockup_prompts).slice(0, 4),

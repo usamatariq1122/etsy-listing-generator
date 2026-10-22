@@ -18,7 +18,7 @@ const {
   PRODUCT_TYPES,
   resolveProductType,
   templateBody,
-  listTemplates,
+  listTemplateTypes,
   saveTemplate,
   clearTemplate,
   templateIssues,
@@ -40,17 +40,17 @@ test('an un-customised type has no body, so the built-in wording is used', async
   assert.equal(await templateBody(null), 'General brief');
 });
 
-test('listTemplates shows the saved wording for customised types and a default for the rest', async () => {
+test('listTemplateTypes names the customised types but never returns prompt text', async () => {
   templates.clear();
   templates.set('crochet', 'My crochet brief');
-  const list = await listTemplates();
+  const list = await listTemplateTypes();
   assert.equal(list.length, PRODUCT_TYPES.length);
   const crochet = list.find((type) => type.value === 'crochet');
   assert.equal(crochet.customised, true);
-  assert.equal(crochet.body, 'My crochet brief');
+  assert.equal(crochet.body, undefined, 'the prompt text is never exposed to callers');
   const art = list.find((type) => type.value === 'art');
   assert.equal(art.customised, false);
-  assert.ok(art.body.length > 0, 'an un-customised type still shows the built-in brief to edit');
+  assert.equal(art.body, undefined, 'no built-in brief is returned either');
 });
 
 test('a save and a clear round-trip the store', async () => {

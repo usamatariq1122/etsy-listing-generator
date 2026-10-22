@@ -85,11 +85,8 @@ import { runAs } from './requestContext.js';
 import { canGenerate, dailyLimit, limitMessage, usageFor } from './quota.js';
 import {
   PRODUCT_TYPES,
-  clearTemplate,
-  listTemplates,
+  listTemplateTypes,
   resolveProductType,
-  saveTemplate,
-  templateIssues,
 } from './promptTemplates.js';
 
 // The single identity a request acts as. An account session wins; otherwise a
@@ -214,13 +211,19 @@ async function publicView(product) {
     productInfo: product.product_info || {},
     keywords: product.selected_keywords || [],
     status: product.status,
+    patternText: product.pattern_text || '',
+    patternFormatted: product.pattern_formatted || '',
+    originalConfirmed: Boolean(product.original_confirmed),
+    commercialLicense: Boolean(product.commercial_license),
+    formatMode: product.format_mode ?? 'none',
     file1Text: product.file1_text || '',
     file2Text: product.file2_text || '',
     listing: listingFields(product.file2_text),
     price: product.price ?? null,
     mockupPrompts: product.mockup_prompts || [],
     infographicPrompts: product.infographic_prompts || [],
-    slots: SLOTS,
+    // A non-commercial listing never shows the licence infographic.
+    slots: SLOTS.filter((slot) => !slot.onlyWhenLicense || Boolean(product.commercial_license)),
     rules: { ...IMAGE_RULES, maxBytes: maxUploadBytes(), pdfMaxBytes: maxPdfBytes() },
     // The limits the seller edits against, so the tag checker is the same numbers
     // the pipeline enforces rather than a copy that could drift.
@@ -462,6 +465,14 @@ const routes = [
       if (productName.length < 3) throw new HttpError('Enter a product name or niche (at least 3 characters).');
       if (productName.length > 200) throw new HttpError('Product name is too long (max 200 characters).');
 
+      // The seller's own pattern is now required and must be confirmed original.
+      const patternText = scrubBannedWord(String(ctx.body?.patternText ?? '')).text.trim();
+      if (!patternText) throw new HttpError('Paste your pattern or product content — the listing is built around it.');
+      if (ctx.body?.originalConfirmed !== true) {
+        throw new HttpError('Tick that the pattern is your own original, tested design before generating.');
+      }
+      const formatMode = ctx.body?.formatMode === 'format_only' ? 'format_only' : 'none';
+
       // Stop a full account before it even queues a row; the authoritative charge
       // still happens when the model is called, so this stays a courtesy gate.
       if (ctx.user) {
@@ -479,6 +490,10 @@ const routes = [
         userId: ctx.user?.id ?? null,
         productType: resolveProductType(ctx.body?.productType),
         productInfo: hasProductInfo(info) ? info : null,
+        patternText,
+        originalConfirmed: ctx.body?.originalConfirmed === true,
+        commercialLicense: ctx.body?.commercialLicense === true,
+        formatMode,
       });
       return json({ product: await finished(id) }, 201);
     } },
@@ -496,6 +511,14 @@ const routes = [
   // the background function and never reaches this router.
   { method: 'POST', pattern: '/run/:id', handler: async (ctx) => {
       const product = await loadProduct(ctx.params, ctx.user);
+      // Mirrors the authoritative reject in generate.js so a local run fails
+      // immediately; the hosted background job still enforces it there.
+      if (!String(product.pattern_text ?? '').trim()) {
+        throw new HttpError('Paste the pattern or product content first.', 409);
+      }
+      if (product.original_confirmed !== true) {
+        throw new HttpError('Confirm the pattern is your own original, tested design first.', 409);
+      }
       await updateProduct(product.id, { status: 'queued' });
       startGeneration(product.id);
       return json({ started: true, id: product.id }, 202);
@@ -624,6 +647,9 @@ const routes = [
   { method: 'POST', pattern: '/products/:id/image/:slotId/generate', handler: async (ctx) => {
       const product = await loadProduct(ctx.params, ctx.user);
       const slot = requireSlot(ctx.params);
+      if (slot.uploadOnly) {
+        throw new HttpError(`"${slot.label}" must be a real photo you upload — it is never AI-generated.`, 409);
+      }
       const { buffer, provider } = await generateImage(promptFor(slot, product));
       if (buffer.length > maxUploadBytes()) {
         throw new HttpError('The generated image is too large for this host. Upload your own instead.', 413);
@@ -753,33 +779,13 @@ const routes = [
   { method: 'DELETE', pattern: '/settings/theme', handler: async () =>
       json({ removed: true, theme: await clearTheme() }) },
 
-  // The listing brief the text model writes from, editable per product type.
-  // Reading the types is open to anyone signed in so the editor can show the
-  // current wording; only the owner (or a solo local run with no accounts yet)
-  // may change it, because these prompts are shared across every listing.
-  // The listing briefs are the owner's own wording, so reading them is limited
-  // to the owner too (or a solo local run with no accounts yet). Other accounts
-  // still benefit from a chosen type's template at generation time without ever
-  // seeing its text.
+  // The listing brief is a locked server constant now: it is never editable from
+  // the UI and never returned by any route. This endpoint hands back only the
+  // product-type catalogue with a "customised" flag, so a screen can show which
+  // types exist without any wording. Reading it stays owner-only.
   { method: 'GET', pattern: '/settings/prompts', handler: async (ctx) => {
       requirePromptAdmin(ctx);
-      return json({ types: await listTemplates() });
-    } },
-
-  { method: 'PUT', pattern: '/settings/prompt', handler: async (ctx) => {
-      requirePromptAdmin(ctx);
-      const type = String(ctx.body?.type ?? '').trim().toLowerCase();
-      const issues = templateIssues(type, ctx.body?.body);
-      if (issues.length) throw new HttpError(issues.join(' '), 400, { issues });
-      await saveTemplate(type, ctx.body.body);
-      return json({ saved: true, types: await listTemplates() });
-    } },
-
-  { method: 'DELETE', pattern: '/settings/prompt', handler: async (ctx) => {
-      requirePromptAdmin(ctx);
-      const type = String(ctx.query.get('type') ?? '').trim().toLowerCase();
-      if (await clearTemplate(type)) return json({ removed: true, types: await listTemplates() });
-      return json({ removed: false, types: await listTemplates() });
+      return json({ types: await listTemplateTypes() });
     } },
 
   // Etsy's standing answers, editable only while Etsy is switched on and only by
@@ -1012,6 +1018,18 @@ const routes = [
       if (rows.length > BULK_MAX) {
         throw new HttpError(`A batch is capped at ${BULK_MAX} listings at a time (this file has ${rows.length}). Split it up.`);
       }
+      // Same policy gate the studio applies: every listing must be built on the
+      // seller's own pattern, and the batch is attested once as all-original.
+      if (ctx.body?.originalConfirmed !== true) {
+        throw new HttpError('Confirm these patterns are all your own original, tested designs before running a batch.');
+      }
+      const missing = rows.filter((row) => !row.pattern);
+      if (missing.length) {
+        throw new HttpError(
+          `Add a pattern or product content for every row. ${missing.length} row(s) have none`
+            + ` (e.g. ${missing.slice(0, 3).map((row) => `"${row.productName}"`).join(', ')}).`,
+        );
+      }
 
       const name = displayName(ctx.body?.name, 'Bulk batch').slice(0, 120);
       const userId = ctx.user?.id ?? null;
@@ -1021,7 +1039,15 @@ const routes = [
       const created = [];
       for (const [idx, row] of rows.entries()) {
         const productId = userId ? ownedId(userId, crypto.randomUUID()) : crypto.randomUUID();
-        await createProduct({ id: productId, productName: row.productName, keywords: pickedKeywords(row.keywords), status: 'queued', userId });
+        await createProduct({
+          id: productId,
+          productName: row.productName,
+          keywords: pickedKeywords(row.keywords),
+          status: 'queued',
+          userId,
+          patternText: row.pattern,
+          originalConfirmed: true,
+        });
         await insertBulkRow({ jobId, idx, productName: row.productName, keywords: row.keywords, productId });
         created.push({ idx, productName: row.productName, keywords: row.keywords, productId, status: 'queued' });
       }

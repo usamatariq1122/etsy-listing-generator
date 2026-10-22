@@ -8,6 +8,7 @@ import Workspace from './components/Workspace.jsx';
 import HistoryView from './components/HistoryView.jsx';
 import BulkView from './components/BulkView.jsx';
 import KeysView from './components/KeysView.jsx';
+import PortalAccess from './components/PortalAccess.jsx';
 import AdminView from './components/AdminView.jsx';
 import EtsyPanel from './components/EtsyPanel.jsx';
 import Login from './components/Login.jsx';
@@ -32,7 +33,7 @@ const TITLES = {
   history: ['History', 'Your saved listings — open one to edit, reprint or delete.'],
   bulk: ['Bulk', 'One listing per CSV row, run through the same generator.'],
   keys: ['Model & keys', 'Choose which model writes first and manage the access keys it uses.'],
-  settings: ['Settings', 'Keywords, brand colours, prompts, Etsy defaults and the portal password.'],
+  settings: ['Settings', 'Keywords, brand colours and Etsy shop defaults.'],
   admin: ['Admin', 'Users, usage and failed jobs across the portal.'],
 };
 
@@ -65,17 +66,21 @@ export default function App() {
   const [notice, setNotice] = useState(null);
   const [health, setHealth] = useState(null);
   const [settings, setSettings] = useState(null);
-  const [prompts, setPrompts] = useState(null);
   const [history, setHistory] = useState([]);
   const [session, setSession] = useState(null);
   const [productName, setProductName] = useState('');
   const [productType, setProductType] = useState('general');
   const [productInfo, setProductInfo] = useState({});
+  const [patternText, setPatternText] = useState('');
+  const [originalConfirmed, setOriginalConfirmed] = useState(false);
+  const [commercialLicense, setCommercialLicense] = useState(false);
+  const [formatMode, setFormatMode] = useState('none');
   const [picked, setPicked] = useState([]);
   const [slots, setSlots] = useState([]);
   const [staged, setStaged] = useState([]);
   const [etsy, setEtsy] = useState(null);
   const [legal, setLegal] = useState(null);
+  const [accessOpen, setAccessOpen] = useState(false);
 
   // Advanced Settings is now its own sidebar view rather than a fold under the
   // studio. These keep the old open/toggle names the banners and loaders use.
@@ -126,26 +131,11 @@ export default function App() {
     }
   }, []);
 
-  const refreshPrompts = useCallback(async () => {
-    try {
-      const data = await api.prompts();
-      setPrompts(data.types);
-    } catch {
-      setPrompts(null);
-    }
-  }, []);
-
   // Read once after sign-in so the closed Advanced summary can name the model,
   // then again whenever the panel opens.
   useEffect(() => {
     if (session?.signedIn) refreshSettings();
   }, [session, refreshSettings]);
-
-  // The editable listing briefs are only needed inside the Advanced panel, so
-  // they load when it opens rather than on every page.
-  useEffect(() => {
-    if (session?.signedIn && advancedOpen) refreshPrompts();
-  }, [session, advancedOpen, refreshPrompts]);
 
   // The ZIP box maps files onto slots before any product exists, so the slot
   // names and their rules come from the server on their own.
@@ -283,7 +273,7 @@ export default function App() {
     await generateText(
       'Generating your listing package',
       'The text model is writing File 1, File 2 and 7 image prompts. This takes about 30-60 seconds.',
-      () => api.create(productName.trim(), picked, productType === 'general' ? null : productType, productInfo),
+      () => api.create(productName.trim(), picked, productType === 'general' ? null : productType, productInfo, { patternText, originalConfirmed, commercialLicense, formatMode }),
     );
   }
 
@@ -504,7 +494,7 @@ export default function App() {
     const created = await generateText(
       'Generating your listing package',
       'The text model is writing File 1, File 2 and 7 image prompts. This takes about 30-60 seconds.',
-      () => api.create(productName.trim(), picked, productType === 'general' ? null : productType, productInfo),
+      () => api.create(productName.trim(), picked, productType === 'general' ? null : productType, productInfo, { patternText, originalConfirmed, commercialLicense, formatMode }),
     );
     if (!created) return;
     if (missing.length) {
@@ -590,6 +580,10 @@ export default function App() {
       setProductName(data.product.productName || '');
       setProductType(data.product.productType || 'general');
       setProductInfo(data.product.productInfo || {});
+      setPatternText(data.product.patternText || '');
+      setOriginalConfirmed(Boolean(data.product.originalConfirmed));
+      setCommercialLicense(Boolean(data.product.commercialLicense));
+      setFormatMode(data.product.formatMode === 'format_only' ? 'format_only' : 'none');
       setPicked(data.product.keywords || []);
       setStaged([]);
     });
@@ -600,6 +594,10 @@ export default function App() {
     setProductName('');
     setProductType('general');
     setProductInfo({});
+    setPatternText('');
+    setOriginalConfirmed(false);
+    setCommercialLicense(false);
+    setFormatMode('none');
     setPicked([]);
     setStaged([]);
     setError(null);
@@ -679,27 +677,12 @@ export default function App() {
     }
   }
 
-  async function handleSavePrompt(type, body) {
-    const data = await run('Saving prompt', null, () => api.savePrompt(type, body));
-    if (data) {
-      setPrompts(data.types);
-      setNotice('That listing brief will be used for the next listing of its type.');
-    }
-    return data;
-  }
-
-  async function handleRemovePrompt(type) {
-    const data = await run('Reverting prompt', null, () => api.removePrompt(type));
-    if (data) {
-      setPrompts(data.types);
-      setNotice('That type is back to the built-in brief.');
-    }
-  }
-
-  async function handleChangePassword(current, next) {    const data = await run('Saving password', null, () => api.savePassword(next, current));
+  async function handleChangePassword(current, next) {
+    const data = await run('Saving password', null, () => api.savePassword(next, current));
     if (data) {
       setSettings(data);
       setNotice('Password saved. Other browsers signed in with this portal have been signed out.');
+      refreshAuth();
     }
   }
 
@@ -780,9 +763,9 @@ export default function App() {
         <div className="side-foot">
           <button
             className="side-access"
-            onClick={() => { setView('settings'); setNavOpen(false); }}
+            onClick={() => { setAccessOpen(true); setNavOpen(false); }}
             disabled={Boolean(busy)}
-            title={session.protected ? 'Portal is password-protected — manage it under Settings' : 'Portal is open to anyone with the address — set a password under Settings'}
+            title={session.protected ? 'Portal is password-protected — manage it here' : 'Portal is open to anyone with the address — set a password here'}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <rect x="5" y="11" width="14" height="9" rx="2" />
@@ -874,7 +857,7 @@ export default function App() {
       {quality?.notes?.length > 0 && (
         <div className="banner warn">
           <strong>
-            {modelLabel(quality)} wrote File 1 at {quality.words} words.
+            {modelLabel(quality)} wrote this listing.
           </strong>
           <ul>
             {quality.notes.map((note) => (
@@ -927,17 +910,12 @@ export default function App() {
             picked={picked}
             onPicked={setPicked}
             settings={settings}
-            prompts={prompts}
-            canManagePrompts={!session.account || session.account.role === 'admin'}
             etsy={etsy}
             canManageEtsy={!session.account || session.account.role === 'admin'}
             onSaveBrand={handleSaveBrand}
             onSaveTheme={handleSaveTheme}
             onRemoveTheme={handleRemoveTheme}
-            onSavePrompt={handleSavePrompt}
-            onRemovePrompt={handleRemovePrompt}
             onSaveEtsyDefaults={handleSaveEtsyDefaults}
-            onChangePassword={handleChangePassword}
           />
         ) : view === 'admin' ? (
           <AdminView />
@@ -968,6 +946,14 @@ export default function App() {
                 onProductType={setProductType}
                 productInfo={productInfo}
                 onProductInfo={setProductInfo}
+                patternText={patternText}
+                onPatternText={setPatternText}
+                originalConfirmed={originalConfirmed}
+                onOriginalConfirmed={setOriginalConfirmed}
+                commercialLicense={commercialLicense}
+                onCommercialLicense={setCommercialLicense}
+                formatMode={formatMode}
+                onFormatMode={setFormatMode}
                 onCreate={handleCreate}
                 etsyConnected={Boolean(etsy?.enabled && etsy?.connected)}
                 onCreateToDraft={handleCreateToDraft}
@@ -1020,6 +1006,14 @@ export default function App() {
         )}
         </main>
       </div>
+
+      <PortalAccess
+        open={accessOpen}
+        configured={Boolean(session.protected)}
+        busy={busy}
+        onChange={handleChangePassword}
+        onClose={() => setAccessOpen(false)}
+      />
     </div>
   );
 }

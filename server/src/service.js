@@ -30,16 +30,12 @@ const wordCount = (text) => String(text ?? '').trim().split(/\s+/).filter(Boolea
  * wrote it, whether that model is a short-answer one, and how long the guide
  * turned out.
  */
-function guideQuality(provider, model, skipped, file1Text) {
-  const words = wordCount(file1Text);
+function guideQuality(provider, model, skipped) {
   const notes = [];
   if (provider === 'gemini' && /lite/i.test(model)) {
-    notes.push(`${model} is the fast model: it answers sooner but writes shorter guides than the brief asks for.`);
+    notes.push(`${model} is the fast model: it writes shorter listings than the brief asks for.`);
   }
-  if (words < MIN_GUIDE_WORDS) {
-    notes.push(`File 1 came out at ${words} words, under the ${MIN_GUIDE_WORDS}-word minimum.`);
-  }
-  return { provider, model, words, notes, skipped };
+  return { provider, model, notes, skipped };
 }
 
 /**
@@ -50,7 +46,7 @@ function guideQuality(provider, model, skipped, file1Text) {
  * for the niche: the ones the seller ticked when they ticked any, otherwise the
  * ones the autocomplete lookup returned. The finished fields then get scored.
  */
-export async function generateListingText(productName, picked = [], info = null) {
+export async function generateListingText(productName, picked = [], info = null, extras = {}) {
   let lastIssues = [];
   const brand = await brandName();
   const live = picked.length ? null : await buyerQueries(productName);
@@ -58,11 +54,20 @@ export async function generateListingText(productName, picked = [], info = null)
   const keywords = picked.length
     ? { terms: picked, picked, seeds: [], source: 'picked' }
     : { ...live, picked: [] };
+  const formatMode = extras.formatMode === 'format_only' ? 'format_only' : 'none';
 
   for (let attempt = 1; attempt <= MAX_TEXT_ATTEMPTS; attempt += 1) {
-    const { json: raw, provider, model, skipped } = await callTextModel(productName, brand, keywords.terms, info);
+    const { json: raw, provider, model, skipped } = await callTextModel(
+      productName, brand, keywords.terms, info,
+      { patternText: extras.patternText || '', commercialLicense: Boolean(extras.commercialLicense), formatMode },
+    );
     const shape = normalizeShape(raw, { allow: [brand] });
-    const cleaned = cleanFileOne(shape.file1_text);
+    // Deliverable 1 is the seller's OWN text. In format_only the model may only
+    // re-flow it; nothing here takes newly written pattern steps from the model.
+    const guideSource = formatMode === 'format_only'
+      ? (shape.pattern_formatted || extras.patternText || '')
+      : (extras.patternText || '');
+    const cleaned = cleanFileOne(guideSource);
     const repaired = repairSeo({ ...shape, file1_text: cleaned.text });
     const aligned = alignSeo(repaired.shape, keywords.terms);
     // A model that returns one long line would print as one solid block.
@@ -70,10 +75,12 @@ export async function generateListingText(productName, picked = [], info = null)
       ...aligned.shape,
       file1_text: applyBrandLicense(groove(aligned.shape.file1_text), brand),
       file2_text: groove(aligned.shape.file2_text),
+      pattern_formatted: formatMode === 'format_only' ? groove(cleaned.text) : null,
     };
 
+    // Only the marketing package is retried; the guide is the seller's own text,
+    // so anything left in it is a review point, never a reason to re-ask the model.
     const blocking = [
-      ...validateFileOne(result.file1_text),
       ...validateFileTwo(result.file2_text),
       ...shapeIssues(result),
     ];
@@ -84,7 +91,7 @@ export async function generateListingText(productName, picked = [], info = null)
       ...summarizeCleaning(cleaned.removed),
       ...(promptWords ? [`removed the banned word ${promptWords} time(s) from the image prompts`] : []),
     ];
-    const quality = guideQuality(provider, model, skipped, result.file1_text);
+    const quality = guideQuality(provider, model, skipped);
     const seoCheck = checkSeo({
       shape: result,
       file2Text: result.file2_text,

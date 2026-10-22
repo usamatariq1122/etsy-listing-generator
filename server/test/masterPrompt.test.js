@@ -1,41 +1,32 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-// masterPrompt and requestContext are both real modules: the generation pipeline
-// primes a body on the ambient scope and buildSystemPrompt must read it, then fall
-// back to the built-in brief when nothing is primed.
+// masterPrompt is now a thin re-export of the locked listing brief: it does not
+// read the ambient primed body any more, so the same brief comes out whatever a
+// caller tried to prime. Only the brand token is substituted.
 const { buildSystemPrompt, DEFAULT_PROMPT_BODY } = await import('../src/masterPrompt.js');
-const { runAs, setPromptBody, currentPromptBody } = await import('../src/requestContext.js');
+const { runAs, setPromptBody } = await import('../src/requestContext.js');
 
-test('with nothing primed the built-in brief is used and the product is named', () => {
-  assert.equal(currentPromptBody(), null);
+test('the locked brief names the configured brand and leaves no placeholders', () => {
   const prompt = buildSystemPrompt('Crochet bear', 'Willow');
-  assert.ok(prompt.includes('Crochet bear'));
-  assert.ok(!prompt.includes('{{product}}'), 'the product placeholder is filled in');
-  assert.ok(!prompt.includes('{{brand}}'), 'the brand placeholder is filled in');
   assert.ok(prompt.includes('Willow'), 'the configured brand reaches the prompt');
+  assert.ok(!prompt.includes('{{brand}}'), 'the brand placeholder is filled in');
+  assert.ok(!prompt.includes('{{product}}'), 'no product placeholder is left dangling');
+  assert.ok(prompt.includes('pattern_text'), 'the brief is built around the seller pattern input');
+  assert.ok(prompt.includes('seo_tags'), 'the output contract is appended');
 });
 
-test('a primed body replaces the brief but the JSON contract still wraps it', async () => {
-  await runAs('u1', () => {
-    setPromptBody('Write a tiny card that says {{brand}} for {{product}}');
-    const prompt = buildSystemPrompt('Thank you note', 'Acme');
-    assert.ok(prompt.includes('Write a tiny card'), 'the customised brief is used');
-    assert.ok(prompt.includes('Thank you note'), 'the product placeholder still fills inside a custom brief');
-    assert.ok(prompt.includes('Acme'), 'the brand placeholder still fills inside a custom brief');
-    assert.ok(prompt.includes('seo_tags'), 'the output contract is appended whatever the brief says');
-  });
-  assert.equal(currentPromptBody(), null, 'the primed body does not leak back out');
-});
-
-test('DEFAULT_PROMPT_BODY is the built-in brief an unset type falls back to', () => {
-  assert.ok(DEFAULT_PROMPT_BODY.length > 0);
-  // The built-in default must not be mistaken for a customisation: priming it
-  // explicitly yields exactly the prompt the built-in path already produces.
-  const builtIn = buildSystemPrompt('Widget', 'Acme');
+test('priming a body has no effect: the brief is locked, not editable', () => {
+  const builtIn = buildSystemPrompt('Thank you note', 'Acme');
   const primed = runAs('u1', () => {
-    setPromptBody(DEFAULT_PROMPT_BODY);
-    return buildSystemPrompt('Widget', 'Acme');
+    setPromptBody('Write a tiny card that says {{brand}} for {{product}}');
+    return buildSystemPrompt('Thank you note', 'Acme');
   });
-  assert.equal(primed, builtIn);
+  assert.equal(primed, builtIn, 'a primed body cannot change the locked system prompt');
+  assert.ok(!primed.includes('Write a tiny card'), 'the primed wording is never used');
+});
+
+test('DEFAULT_PROMPT_BODY is the locked brief the model is given', () => {
+  assert.ok(DEFAULT_PROMPT_BODY.length > 0);
+  assert.ok(DEFAULT_PROMPT_BODY.includes('You do NOT author a product guide'), 'the no-authoring rule is in the locked brief');
 });

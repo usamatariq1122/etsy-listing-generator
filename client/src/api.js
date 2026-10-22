@@ -72,11 +72,17 @@ export const api = {
   // exists yet — the ZIP box needs them to label its mapping.
   slots: () => request('/api/products/slots'),
   get: (id) => request(`/api/products/${id}`),
-  create: (productName, keywords = [], productType = null, productInfo = null) =>
+  create: (productName, keywords = [], productType = null, productInfo = null, extras = {}) =>
     request('/api/products', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productName, keywords, productType, productInfo }),
+      body: JSON.stringify({
+        productName, keywords, productType, productInfo,
+        patternText: extras.patternText ?? '',
+        originalConfirmed: Boolean(extras.originalConfirmed),
+        commercialLicense: Boolean(extras.commercialLicense),
+        formatMode: extras.formatMode === 'format_only' ? 'format_only' : 'none',
+      }),
     }),
   // Buyer queries for the tick screen. A niche repeats inside a day come from
   // the server's cache, so this never hammers the autocomplete service.
@@ -113,13 +119,14 @@ export const api = {
   validate: (id) => request(`/api/products/${id}/validation`),
   remove: (id) => request(`/api/products/${id}`, { method: 'DELETE' }),
   clearHistory: () => request('/api/products', { method: 'DELETE' }),
-  // Bulk CSV: one row per product name. The batch is created first, then each
-  // row is run through the same single-listing pipeline one at a time.
-  createBulk: (name, csv) =>
+  // Bulk CSV: one row per product name, each carrying its own pattern text. The
+  // batch is created first, then each row is run through the same single-listing
+  // pipeline one at a time. The whole batch is attested once as all-original.
+  createBulk: (name, csv, originalConfirmed) =>
     request('/api/bulk', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, csv }),
+      body: JSON.stringify({ name, csv, originalConfirmed: Boolean(originalConfirmed) }),
     }),
   bulkJobs: () => request('/api/bulk'),
   bulkJob: (id) => request(`/api/bulk/${id}`),
@@ -159,15 +166,6 @@ export const api = {
       body: JSON.stringify({ theme }),
     }),
   removeTheme: () => request('/api/settings/theme', { method: 'DELETE' }),
-  // The per-product-type listing brief. Reading is open, editing is the owner's.
-  prompts: () => request('/api/settings/prompts'),
-  savePrompt: (type, body) =>
-    request('/api/settings/prompt', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, body }),
-    }),
-  removePrompt: (type) => request(`/api/settings/prompt?type=${encodeURIComponent(type)}`, { method: 'DELETE' }),
   // The owner's read-only dashboard. 403 for anyone but an admin account, so the
   // caller only offers the screen once it knows the signed-in role.
   adminOverview: () => request('/api/admin/overview'),

@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { requireKey, resolveModel } from './apikeys.js';
 import { buildSystemPrompt } from './masterPrompt.js';
+import { buildListingUserMessage } from './prompts/listing.js';
 import { productBrief } from './productBrief.js';
 import { extractJson } from './jsonparse.js';
 import { withRetry } from './retry.js';
@@ -9,15 +10,15 @@ import { withRetry } from './retry.js';
 const LISTING_SCHEMA = {
   type: 'OBJECT',
   properties: {
-    file1_text: { type: 'STRING' },
     file2_text: { type: 'STRING' },
     seo_title: { type: 'STRING' },
     seo_tags: { type: 'ARRAY', items: { type: 'STRING' } },
+    pattern_formatted: { type: 'STRING' },
     mockup_prompts: { type: 'ARRAY', items: { type: 'STRING' } },
     infographic_prompts: { type: 'ARRAY', items: { type: 'STRING' } },
   },
-  required: ['file1_text', 'file2_text', 'seo_title', 'seo_tags', 'mockup_prompts', 'infographic_prompts'],
-  propertyOrdering: ['file1_text', 'file2_text', 'seo_title', 'seo_tags', 'mockup_prompts', 'infographic_prompts'],
+  required: ['file2_text', 'seo_title', 'seo_tags', 'mockup_prompts', 'infographic_prompts'],
+  propertyOrdering: ['file2_text', 'seo_title', 'seo_tags', 'pattern_formatted', 'mockup_prompts', 'infographic_prompts'],
 };
 
 /** Gemini returns quota and key failures as a JSON blob; the UI shows one readable line. */
@@ -44,7 +45,7 @@ function friendlyError(error, model) {
 }
 
 /** Calls a Gemini text model with the master prompt and returns the parsed package JSON. */
-export async function callGeminiText(productName, brand, keywords, modelOverride, info) {
+export async function callGeminiText(productName, brand, keywords, modelOverride, info, payload = {}) {
   const apiKey = await requireKey('gemini');
   const model = modelOverride || (await resolveModel('gemini'));
 
@@ -54,7 +55,7 @@ export async function callGeminiText(productName, brand, keywords, modelOverride
     response = await withRetry(async () => {
       const result = await ai.models.generateContent({
         model,
-        contents: `Create the complete listing package for: ${productName}${productBrief(info)}`,
+        contents: buildListingUserMessage({ productName, keywords, details: productBrief(info).trim(), ...payload }),
         config: {
           systemInstruction: buildSystemPrompt(productName, brand, keywords),
           responseMimeType: 'application/json',

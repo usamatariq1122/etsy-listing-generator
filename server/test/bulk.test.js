@@ -10,12 +10,17 @@ test('parseRows keeps commas inside quotes and unwraps doubled quotes', () => {
 
 test('parseCsv reads a header row in any column order', () => {
   const { rows } = parseCsv('keywords,product_name\nred;blue,Fidget toy\n,\n');
-  assert.deepEqual(rows, [{ productName: 'Fidget toy', keywords: ['red', 'blue'] }]);
+  assert.deepEqual(rows, [{ productName: 'Fidget toy', keywords: ['red', 'blue'], pattern: '' }]);
+});
+
+test('parseCsv reads a pattern column when the header names one', () => {
+  const { rows } = parseCsv('product_name,keywords,pattern\nFidget toy,red;blue,a tested pattern text\n');
+  assert.deepEqual(rows, [{ productName: 'Fidget toy', keywords: ['red', 'blue'], pattern: 'a tested pattern text' }]);
 });
 
 test('parseCsv treats a headerless file as name then keywords', () => {
   const { rows, skipped } = parseCsv('Crochet hat, yarn; pattern\nab, x');
-  assert.deepEqual(rows[0], { productName: 'Crochet hat', keywords: ['yarn', 'pattern'] });
+  assert.deepEqual(rows[0], { productName: 'Crochet hat', keywords: ['yarn', 'pattern'], pattern: '' });
   // "ab" is under the 3-character floor, so it is skipped and reported.
   assert.equal(skipped, 1);
   assert.equal(rows.length, 1);

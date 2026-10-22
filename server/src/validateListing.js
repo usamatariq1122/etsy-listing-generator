@@ -32,6 +32,15 @@ const words = (text) => (String(text ?? '').trim().split(/\s+/).filter(Boolean).
 /** One graded finding. */
 const at = (level, section, message, extra = {}) => ({ level, section, message, ...extra });
 
+/** Numbers (runs, counts, cm/inch specs) that appear in `text` but not `source`. */
+const NUMBER_RE = /\d+(?:[.,]\d+)?/g;
+function strayNumbers(text, source) {
+  if (!String(source ?? '').trim()) return [];
+  const allowed = new Set(String(source).match(NUMBER_RE) ?? []);
+  const found = [...new Set(String(text ?? '').match(NUMBER_RE) ?? [])];
+  return found.filter((n) => !allowed.has(n));
+}
+
 /**
  * The verdict from already-gathered facts. Pure and synchronous so it can be
  * unit tested without a database, Etsy or the file store.
@@ -68,6 +77,22 @@ export function assessListing(facts) {
     warnings.push(at('warning', 'content', 'Etsy now restricts AI-generated functional guides such as patterns. Confirm this is your own design and you have reviewed and edited the guide before listing it — a purely AI-written pattern is not allowed.'));
   }
 
+  // --- Policy: the listing must be built on the seller's own original pattern. ---
+  if (!String(facts.patternText ?? '').trim()) {
+    errors.push(at('error', 'content', 'No pattern or product content was saved for this listing. Add your own tested text before generating.'));
+  }
+  const file2Text = facts.file2Text || '';
+  if (!/designed by/i.test(file2Text)) {
+    errors.push(at('error', 'content', 'The listing text has no "Designed by …" attribution line, which Etsy\'s policy and the disclosure require.'));
+  }
+  if (!/ai[- ]assist|created with ai|ai assistance|with ai/i.test(file2Text)) {
+    errors.push(at('error', 'content', 'The listing text has no AI-disclosure line. Etsy requires you to state AI\'s role — regenerate or add it.'));
+  }
+  const numbersLeaked = strayNumbers(file2Text, facts.patternText);
+  if (numbersLeaked.length) {
+    errors.push(at('error', 'content', `The listing states numbers not in your pattern (${numbersLeaked.slice(0, 5).join(', ')}). Fix them so the listing matches your design exactly.`, { numbers: numbersLeaked }));
+  }
+
   // --- SEO: title and tags against Etsy's own field limits. ---
   if (!titleChars) {
     errors.push(at('error', 'seo', 'The SEO title is empty. Etsy lists need one.'));
@@ -79,8 +104,8 @@ export function assessListing(facts) {
   if (tooLong.length) {
     errors.push(at('error', 'seo', `${tooLong.length} tag(s) go over ${SEO_LIMITS.tagMax} characters; Etsy trims them out. Shorten them before saving the draft.`, { tags: tooLong }));
   }
-  if (tags.length > SEO_LIMITS.tagCount) {
-    errors.push(at('error', 'seo', `There are ${tags.length} tags; Etsy accepts at most ${SEO_LIMITS.tagCount}.`));
+  if (tags.length !== SEO_LIMITS.tagCount) {
+    errors.push(at('error', 'seo', `Etsy wants exactly ${SEO_LIMITS.tagCount} tags; this listing has ${tags.length}.`));
   }
   const seen = new Set();
   const duplicates = tags.filter((tag) => {
@@ -91,11 +116,6 @@ export function assessListing(facts) {
   });
   if (duplicates.length) {
     warnings.push(at('warning', 'seo', `Repeated tag(s): ${duplicates.map((tag) => `"${tag}"`).join(', ')}. Etsy reads them as one.`));
-  }
-  if (tags.length === 0) {
-    warnings.push(at('warning', 'seo', 'No search tags yet — Etsy search relies on them.'));
-  } else if (tags.length < HEALTHY_TAG_MIN) {
-    warnings.push(at('warning', 'seo', `Only ${tags.length} tags filled; ${SEO_LIMITS.tagCount} use the whole field.`));
   }
 
   // --- Price. Currency always comes from the shop, so it is only information. ---
@@ -115,6 +135,15 @@ export function assessListing(facts) {
     errors.push(at('error', 'images', 'Etsy needs at least one unedited, real photo of the actual item against a real background. Every image here is AI-generated — upload a real photo before the draft.'));
   } else if (imageCount < HEALTHY_IMAGE_MIN) {
     warnings.push(at('warning', 'images', `${imageCount} of ${HEALTHY_IMAGE_MIN}+ images. More photos lift conversion; use the free prompts to fill the slots.`));
+  }
+  if (facts.patternText && !facts.realPhotoUploaded) {
+    errors.push(at('error', 'images', 'Upload a real photo of the actual item into the "Real item photo" slot. Etsy refuses a listing whose cover is only generated art.'));
+  }
+
+  // --- The banned marketplace word must never reach an image prompt. ---
+  const promptsWithWord = (facts.imagePrompts || []).filter((p) => /etsy/i.test(String(p)));
+  if (promptsWithWord.length) {
+    errors.push(at('error', 'images', `${promptsWithWord.length} image prompt(s) still contain the marketplace name. Regenerate the text before using them.`));
   }
 
   // --- Digital files: a download listing has to carry the product itself. ---
@@ -222,6 +251,9 @@ export async function validateListing(product, options = {}) {
   }
 
   const quality = product.warnings?.quality;
+  const realPhotoUploaded = images.some(
+    (image) => image.slot_id === 'real_photo' && (image.source ?? 'upload') !== 'generate',
+  );
   return assessListing({
     productName: product.product_name,
     productType: product.product_type,
@@ -242,6 +274,11 @@ export async function validateListing(product, options = {}) {
     categoryResolvable,
     briefProvided: Object.values(product.product_info || {}).some((v) => String(v ?? '').trim()),
     seoCheck: product.warnings?.seoCheck ?? null,
+    patternText: product.pattern_text || '',
+    realPhotoUploaded,
+    commercialLicense: Boolean(product.commercial_license),
+    imagePrompts: [...(product.mockup_prompts || []), ...(product.infographic_prompts || [])],
+    file2Text: product.file2_text || '',
   });
 }
 

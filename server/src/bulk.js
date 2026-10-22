@@ -1,10 +1,12 @@
 // One CSV, many listings. The parser turns pasted text into the rows the studio
-// would otherwise take by hand: a product name and the phrases to tick for it.
-// Nothing here generates or prices anything — it only reads the file into rows,
-// and each row later drives the same single-listing pipeline one at a time.
+// would otherwise take by hand: a product name, the phrases to tick for it and
+// the seller's own pattern text the listing is built around. Nothing here
+// generates or prices anything — it only reads the file into rows, and each row
+// later drives the same single-listing pipeline one at a time.
 
 const NAME_COLUMN = /^(product[_ ]?name|name|title|niche)$/i;
 const KEYWORDS_COLUMN = /^(keywords?|tags?|phrases?)$/i;
+const PATTERN_COLUMN = /^(pattern[_ ]?text|pattern|content|product[_ ]?content|text)$/i;
 
 /**
  * A small, honest CSV reader: double quotes may wrap a cell, a doubled quote is
@@ -51,11 +53,12 @@ export function parseRows(text) {
 
 /** Header names to column indexes, so the file may list the columns in any order. */
 function headerIndexes(header) {
-  const indexes = { name: -1, keywords: -1 };
+  const indexes = { name: -1, keywords: -1, pattern: -1 };
   header.forEach((title, index) => {
     const label = title.trim();
     if (indexes.name < 0 && NAME_COLUMN.test(label)) indexes.name = index;
     else if (indexes.keywords < 0 && KEYWORDS_COLUMN.test(label)) indexes.keywords = index;
+    else if (indexes.pattern < 0 && PATTERN_COLUMN.test(label)) indexes.pattern = index;
   });
   return indexes;
 }
@@ -67,10 +70,11 @@ const splitKeywords = (value) =>
     .filter(Boolean);
 
 /**
- * Turns CSV text into rows of `{ productName, keywords }`. A first line that
- * names a product column is treated as a header and skipped; otherwise the whole
- * file is data and column one is the name, column two the keywords. A name over
- * 200 characters is trimmed to the portal's own limit rather than dropped.
+ * Turns CSV text into rows of `{ productName, keywords, pattern }`. A first line
+ * that names a product column is treated as a header and skipped; otherwise the
+ * whole file is data and column one is the name, column two the keywords and no
+ * pattern column is inferred. A name over 200 characters is trimmed to the
+ * portal's own limit rather than dropped.
  */
 export function parseCsv(text) {
   const rows = parseRows(text);
@@ -81,6 +85,7 @@ export function parseCsv(text) {
   const body = hasHeader ? rows.slice(1) : rows;
   const nameAt = hasHeader ? header.name : 0;
   const keywordsAt = hasHeader ? header.keywords : 1;
+  const patternAt = hasHeader ? header.pattern : -1;
 
   const parsed = [];
   let skipped = 0;
@@ -90,7 +95,11 @@ export function parseCsv(text) {
       skipped += 1;
       continue;
     }
-    parsed.push({ productName, keywords: splitKeywords(row[keywordsAt] ?? '') });
+    parsed.push({
+      productName,
+      keywords: splitKeywords(row[keywordsAt] ?? ''),
+      pattern: String(row[patternAt] ?? '').trim(),
+    });
   }
   return { rows: parsed, skipped };
 }

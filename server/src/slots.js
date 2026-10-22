@@ -1,7 +1,17 @@
-// The seven listing images, in ZIP order. promptGroup/promptIndex maps each
+// The listing images, in ZIP order. promptGroup/promptIndex maps each
 // slot onto the matching entry the text model returns, so the seller can paste
 // the prompt into an image tool and upload the result back into the same slot.
+// A slot with promptGroup null (real_photo) has no prompt and is upload-only.
 export const SLOTS = [
+  {
+    id: 'real_photo',
+    label: 'Real item photo',
+    hint: 'An unedited, real photo of the actual finished item against a real background. Etsy requires at least one; this slot is upload-only — it is never AI-generated.',
+    zipName: '00-real-photo',
+    promptGroup: null,
+    promptIndex: null,
+    uploadOnly: true,
+  },
   {
     id: 'cover',
     label: 'Primary cover thumbnail',
@@ -57,6 +67,7 @@ export const SLOTS = [
     zipName: '07-license',
     promptGroup: 'infographic',
     promptIndex: 2,
+    onlyWhenLicense: true,
   },
 ];
 
@@ -65,7 +76,9 @@ export const SLOT_IDS = SLOTS.map((slot) => slot.id);
 export const getSlot = (id) => SLOTS.find((slot) => slot.id === id) || null;
 
 export const promptFor = (slot, product) =>
-  (product[slot.promptGroup === 'mockup' ? 'mockup_prompts' : 'infographic_prompts'] || [])[slot.promptIndex] || '';
+  slot.promptGroup == null
+    ? ''
+    : (product[slot.promptGroup === 'mockup' ? 'mockup_prompts' : 'infographic_prompts'] || [])[slot.promptIndex] || '';
 
 // JPG is written as .jpg on disk and inside the ZIP.
 const EXTENSION = { jpeg: 'jpg', png: 'png' };

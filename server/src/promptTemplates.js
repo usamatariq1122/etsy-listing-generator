@@ -4,7 +4,6 @@ import {
   listPromptTemplates,
   upsertPromptTemplate,
 } from './db.js';
-import { DEFAULT_PROMPT_BODY } from './masterPrompt.js';
 
 // The product types a listing can be written for. These are just names and
 // hints — no prompt wording lives here — so they are safe to ship in the public
@@ -55,19 +54,20 @@ export async function templateBody(value) {
   }
 }
 
-/** Every type with the body a seller would edit against: saved wording, or the built-in default. */
-export async function listTemplates() {
-  const saved = new Map();
+/** Every product type, marked only as customised or not. The prompt text itself
+ *  is a locked server constant and is never returned here, so no surface can
+ *  read it. */
+export async function listTemplateTypes() {
+  const saved = new Set();
   try {
-    for (const row of await listPromptTemplates()) saved.set(row.product_type, row.body);
+    for (const row of await listPromptTemplates()) saved.add(row.product_type);
   } catch {
-    // With no table yet (a brand-new local database) every type simply reads as
-    // un-customised, which is the same answer the pipeline falls back to.
+    // No table yet: every type reads as un-customised, matching the pipeline's
+    // fallback to the locked brief.
   }
-  return PRODUCT_TYPES.map((type) => {
-    const body = saved.get(type.value) ?? null;
-    return { ...type, body: body ?? DEFAULT_PROMPT_BODY, customised: Boolean(body) };
-  });
+  return PRODUCT_TYPES.map((type) => ({
+    value: type.value, label: type.label, hint: type.hint, customised: saved.has(type.value),
+  }));
 }
 
 export async function saveTemplate(value, body) {

@@ -27,10 +27,10 @@ const cap = (text) => String(text).charAt(0).toUpperCase() + String(text).slice(
  * model. Resolves to the package JSON plus which provider and model wrote it and
  * which Gemini models had to be skipped, so the caller can say so out loud.
  */
-export async function callTextModel(productName, brand, keywords = [], info = null) {
+export async function callTextModel(productName, brand, keywords = [], info = null, payload = {}) {
   if (config.textProvider === 'anthropic') {
     const model = await resolveModel('anthropic');
-    return { json: await callClaude(productName, brand, keywords, info), provider: 'anthropic', model, skipped: [] };
+    return { json: await callClaude(productName, brand, keywords, info, payload), provider: 'anthropic', model, skipped: [] };
   }
 
   const choice = await selectedModel();
@@ -49,7 +49,7 @@ export async function callTextModel(productName, brand, keywords = [], info = nu
     const chain = modelChain(preferred, await modelChoices('gemini'));
     for (const model of chain) {
       try {
-        return { json: await callGeminiText(productName, brand, keywords, model, info), provider: 'gemini', model };
+        return { json: await callGeminiText(productName, brand, keywords, model, info, payload), provider: 'gemini', model };
       } catch (error) {
         if (!worthAnotherModel(error)) {
           return note({ who: 'Gemini', called: false, detail: error.message, fatal: error, status: error.status });
@@ -70,7 +70,7 @@ export async function callTextModel(productName, brand, keywords = [], info = nu
       return note({ who, called: false, detail: 'no Groq API key is saved, so it was not asked' });
     }
     try {
-      return { json: await callGroqText(productName, brand, keywords, model, info), provider: 'groq', model };
+      return { json: await callGroqText(productName, brand, keywords, model, info, payload), provider: 'groq', model };
     } catch (error) {
       return note({ who, detail: error.message, status: error?.status });
     }
@@ -82,7 +82,7 @@ export async function callTextModel(productName, brand, keywords = [], info = nu
       return note({ who, called: false, detail: 'no OpenRouter API key is saved, so it was not asked' });
     }
     try {
-      return { json: await callOpenRouterText(productName, brand, keywords, model, info), provider: 'openrouter', model };
+      return { json: await callOpenRouterText(productName, brand, keywords, model, info, payload), provider: 'openrouter', model };
     } catch (error) {
       return note({ who, detail: error.message, status: error?.status });
     }
