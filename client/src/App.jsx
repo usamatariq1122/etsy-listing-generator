@@ -23,6 +23,33 @@ function rewriteHint(quality) {
   return '';
 }
 
+// Static chrome held at module scope so it is built once, not on every render.
+// NavIcon used to live inside App, which gave it a new identity each render and
+// remounted every nav icon on any state change.
+const TITLES = {
+  studio: ['Generator', 'Listing text, image prompts and a ready-to-upload ZIP of PDFs.'],
+  history: ['History', 'Your saved listings — open one to edit, reprint or delete.'],
+  bulk: ['Bulk', 'One listing per CSV row, run through the same generator.'],
+  settings: ['Settings', 'Keywords, model, access keys, brand colours and Etsy defaults.'],
+  admin: ['Admin', 'Users, usage and failed jobs across the portal.'],
+};
+
+const NAV_ICONS = {
+  studio: <path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6zM18 15l.7 2.1L21 18l-2.3.9L18 21l-.7-2.1L15 18l2.3-.9z" />,
+  history: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></>,
+  bulk: <><path d="M12 3l8 4-8 4-8-4 8-4z" /><path d="M4 12l8 4 8-4" /><path d="M4 16l8 4 8-4" /></>,
+  settings: <><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1.3l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2.2-1.3L14 2h-4l-.4 2.4A7 7 0 0 0 7.5 5.7l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .9.1 1.3l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2.2 1.3L10 22h4l.4-2.4a7 7 0 0 0 2.1-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3z" /></>,
+  admin: <path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z" />,
+};
+
+function NavIcon({ name }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {NAV_ICONS[name]}
+    </svg>
+  );
+}
+
 export default function App() {
   const [view, setView] = useState('studio');
   const [navOpen, setNavOpen] = useState(false);
@@ -697,13 +724,6 @@ export default function App() {
 
   // Layout-only chrome: the frame around the existing views. Titles, the account
   // chip and the usage meter read the same state the old top bar did.
-  const TITLES = {
-    studio: ['Generator', 'Listing text, image prompts and a ready-to-upload ZIP of PDFs.'],
-    history: ['History', 'Your saved listings — open one to edit, reprint or delete.'],
-    bulk: ['Bulk', 'One listing per CSV row, run through the same generator.'],
-    settings: ['Settings', 'Keywords, model, access keys, brand colours and Etsy defaults.'],
-    admin: ['Admin', 'Users, usage and failed jobs across the portal.'],
-  };
   const [title, subtitle] = TITLES[view] || TITLES.studio;
   const whoName = session.account?.name || session.account?.email || '';
   const initial = whoName.slice(0, 1).toUpperCase();
@@ -711,18 +731,6 @@ export default function App() {
     ? { ...session.usage, pct: Math.max(0, Math.min(100, (session.usage.remaining / session.usage.limit) * 100)) }
     : null;
 
-  const icon = {
-    studio: <path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6zM18 15l.7 2.1L21 18l-2.3.9L18 21l-.7-2.1L15 18l2.3-.9z" />,
-    history: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></>,
-    bulk: <><path d="M12 3l8 4-8 4-8-4 8-4z" /><path d="M4 12l8 4 8-4" /><path d="M4 16l8 4 8-4" /></>,
-    settings: <><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1.3l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2.2-1.3L14 2h-4l-.4 2.4A7 7 0 0 0 7.5 5.7l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .9.1 1.3l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2.2 1.3L10 22h4l.4-2.4a7 7 0 0 0 2.1-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3z" /></>,
-    admin: <path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z" />,
-  };
-  const NavIcon = ({ name }) => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {icon[name]}
-    </svg>
-  );
   const sideItem = (id, label) => (
     <button
       className={view === id ? 'side-item active' : 'side-item'}
@@ -781,7 +789,7 @@ export default function App() {
               </span>
             </div>
           )}
-          {(session.protected || session.account) && (
+          {session.signedIn && (
             <button className="side-signout" onClick={signOut} disabled={Boolean(busy)} title="Sign out">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" />
