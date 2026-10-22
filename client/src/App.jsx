@@ -7,6 +7,7 @@ import AdvancedPanel from './components/AdvancedPanel.jsx';
 import Workspace from './components/Workspace.jsx';
 import HistoryView from './components/HistoryView.jsx';
 import BulkView from './components/BulkView.jsx';
+import KeysView from './components/KeysView.jsx';
 import AdminView from './components/AdminView.jsx';
 import EtsyPanel from './components/EtsyPanel.jsx';
 import Login from './components/Login.jsx';
@@ -30,7 +31,8 @@ const TITLES = {
   studio: ['Generator', 'Listing text, image prompts and a ready-to-upload ZIP of PDFs.'],
   history: ['History', 'Your saved listings — open one to edit, reprint or delete.'],
   bulk: ['Bulk', 'One listing per CSV row, run through the same generator.'],
-  settings: ['Settings', 'Keywords, model, access keys, brand colours and Etsy defaults.'],
+  keys: ['Model & keys', 'Choose which model writes first and manage the access keys it uses.'],
+  settings: ['Settings', 'Keywords, brand colours, prompts, Etsy defaults and the portal password.'],
   admin: ['Admin', 'Users, usage and failed jobs across the portal.'],
 };
 
@@ -38,6 +40,7 @@ const NAV_ICONS = {
   studio: <path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6zM18 15l.7 2.1L21 18l-2.3.9L18 21l-.7-2.1L15 18l2.3-.9z" />,
   history: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></>,
   bulk: <><path d="M12 3l8 4-8 4-8-4 8-4z" /><path d="M4 12l8 4 8-4" /><path d="M4 16l8 4 8-4" /></>,
+  keys: <><circle cx="7.5" cy="15.5" r="3.5" /><path d="M10 13l8-8" /><path d="M15 8l2.5 2.5" /><path d="M17.5 5.5L20 8" /></>,
   settings: <><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1.3l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2.2-1.3L14 2h-4l-.4 2.4A7 7 0 0 0 7.5 5.7l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .9.1 1.3l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2.2 1.3L10 22h4l.4-2.4a7 7 0 0 0 2.1-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3z" /></>,
   admin: <path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z" />,
 };
@@ -77,7 +80,7 @@ export default function App() {
   // Advanced Settings is now its own sidebar view rather than a fold under the
   // studio. These keep the old open/toggle names the banners and loaders use.
   const advancedOpen = view === 'settings';
-  const setAdvancedOpen = (open) => setView(open ? 'settings' : 'studio');
+  const keysOpen = view === 'keys';
 
   // The desktop rail can shrink to icons; the choice persists across reloads.
   // The mobile drawer ignores it (its styles are scoped above 900px).
@@ -770,10 +773,28 @@ export default function App() {
           {sideItem('studio', 'Generator')}
           {sideItem('history', 'History')}
           {sideItem('bulk', 'Bulk')}
+          {sideItem('keys', 'Keys')}
           {sideItem('settings', 'Settings')}
           {session.account?.role === 'admin' && sideItem('admin', 'Admin')}
         </nav>
         <div className="side-foot">
+          <button
+            className="side-access"
+            onClick={() => { setView('settings'); setNavOpen(false); }}
+            disabled={Boolean(busy)}
+            title={session.protected ? 'Portal is password-protected — manage it under Settings' : 'Portal is open to anyone with the address — set a password under Settings'}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="5" y="11" width="14" height="9" rx="2" />
+              {session.protected ? <path d="M8 11V8a4 4 0 0 1 8 0v3" /> : <path d="M8 11V8a4 4 0 0 1 7.5-2" />}
+            </svg>
+            <span className="side-access-text">
+              <span className="side-access-label">Access</span>
+              <span className={session.protected ? 'side-access-state ok' : 'side-access-state warn'}>
+                {session.protected ? 'Protected' : 'Open'}
+              </span>
+            </span>
+          </button>
           {usage && (
             <div className="usage" title="Resets at midnight UTC">
               <div className="usage-bar"><i style={{ width: `${usage.pct}%` }} /></div>
@@ -816,10 +837,11 @@ export default function App() {
         </header>
 
         <main className="content">
-          {health && health.missingProviders?.length > 0 && !advancedOpen && (
+          {health && health.missingProviders?.length > 0 && !advancedOpen && !keysOpen && (
         <div className="banner warn">
-          <strong>No API key for {health.missingProviders.map(providerLabel).join(' or ')}.</strong> Open Settings
-          and paste a key under Access keys to start generating again.
+          <strong>No API key for {health.missingProviders.map(providerLabel).join(' or ')}.</strong>{' '}
+          <button className="linklike" onClick={() => setView('keys')}>Open Keys</button>
+          {' '}and paste a key under Access keys to start generating again.
         </div>
       )}
 
@@ -834,8 +856,8 @@ export default function App() {
             </ul>
           )}
           <button className="linklike" onClick={() => setError(null)}>Dismiss</button>
-          {KEY_PROBLEM.test(error.message) && !advancedOpen && (
-            <button className="linklike" onClick={() => setAdvancedOpen(true)}>
+          {KEY_PROBLEM.test(error.message) && !advancedOpen && !keysOpen && (
+            <button className="linklike" onClick={() => setView('keys')}>
               {QUOTA_PROBLEM.test(error.message) ? 'Switch model or update key' : 'Update API key'}
             </button>
           )}
@@ -890,6 +912,14 @@ export default function App() {
           />
         ) : view === 'bulk' ? (
           <BulkView onNotice={setNotice} onOpenProduct={openFromHistory} />
+        ) : view === 'keys' ? (
+          <KeysView
+            settings={settings}
+            busy={busy}
+            onSave={handleSaveKey}
+            onRemove={handleRemoveKey}
+            onSaveModel={handleSaveModel}
+          />
         ) : view === 'settings' ? (
           <AdvancedPanel
             productName={productName}
@@ -901,9 +931,6 @@ export default function App() {
             canManagePrompts={!session.account || session.account.role === 'admin'}
             etsy={etsy}
             canManageEtsy={!session.account || session.account.role === 'admin'}
-            onSaveKey={handleSaveKey}
-            onRemoveKey={handleRemoveKey}
-            onSaveModel={handleSaveModel}
             onSaveBrand={handleSaveBrand}
             onSaveTheme={handleSaveTheme}
             onRemoveTheme={handleRemoveTheme}

@@ -3,8 +3,9 @@ import SettingsView from './SettingsView.jsx';
 import { providerLabel } from '../labels.js';
 
 // Everything a first run does not need, now on its own Settings screen reached
-// from the sidebar: the SEO keyword tick list, the model, the saved keys, the
-// brand, the Etsy shop defaults and the password.
+// from the sidebar: the SEO keyword tick list, the brand, the PDF colours, the
+// Etsy shop defaults, the listing prompts and the password. The model and its
+// access keys live on their own "Keys" tab.
 export default function AdvancedPanel({
   productName,
   busy,
@@ -15,9 +16,6 @@ export default function AdvancedPanel({
   canManagePrompts,
   etsy,
   canManageEtsy,
-  onSaveKey,
-  onRemoveKey,
-  onSaveModel,
   onSaveBrand,
   onSaveTheme,
   onRemoveTheme,
@@ -46,7 +44,7 @@ export default function AdvancedPanel({
       </p>
       <KeywordPicker productName={productName} busy={busy} picked={picked} onPicked={onPicked} />
 
-      <h3>Model, keys, colours and access</h3>
+      <h3>Brand, colours, prompts and access</h3>
       {settings ? (
         <SettingsView
           settings={settings}
@@ -55,9 +53,6 @@ export default function AdvancedPanel({
           canManagePrompts={canManagePrompts}
           etsy={etsy}
           canManageEtsy={canManageEtsy}
-          onSave={onSaveKey}
-          onRemove={onRemoveKey}
-          onSaveModel={onSaveModel}
           onSaveBrand={onSaveBrand}
           onSaveTheme={onSaveTheme}
           onRemoveTheme={onRemoveTheme}

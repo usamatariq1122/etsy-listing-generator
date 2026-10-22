@@ -122,6 +122,22 @@ body::before {
 .side-signout svg { width: 19px; height: 19px; flex: 0 0 19px; }
 .side-signout:hover { color: #fda4af; border-color: var(--accent-glow); }
 
+/* Portal-access status chip: a glanceable lock + Protected/Open that jumps to
+   the Settings control. It reports the state; it never edits the password here. */
+.side-access {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--glass); color: var(--ink); cursor: pointer; text-align: left;
+  transition: border-color 0.18s, background 0.18s;
+}
+.side-access:hover { border-color: var(--accent-glow); background: var(--glass-strong); }
+.side-access svg { width: 19px; height: 19px; flex: 0 0 19px; color: var(--muted); }
+.side-access-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.side-access-label { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.side-access-state { font-size: 13.5px; font-weight: 700; }
+.side-access-state.ok { color: var(--accent); }
+.side-access-state.warn { color: #fcd34d; }
+
 @media (min-width: 901px) {
   .sidebar.collapsed { flex-basis: 76px; width: 76px; padding: 22px 10px; align-items: stretch; }
   .sidebar.collapsed .brand { flex-direction: column; gap: 10px; justify-content: center; padding: 2px 0 16px; }
@@ -130,6 +146,8 @@ body::before {
   .sidebar.collapsed .side-item { justify-content: center; padding: 11px 0; }
   .sidebar.collapsed .side-item span { display: none; }
   .sidebar.collapsed .usage { display: none; }
+  .sidebar.collapsed .side-access { justify-content: center; padding: 10px 0; }
+  .sidebar.collapsed .side-access-text { display: none; }
   .sidebar.collapsed .side-account { justify-content: center; }
   .sidebar.collapsed .side-account .who-text { display: none; }
   .sidebar.collapsed .side-signout { justify-content: center; padding: 10px 0; }
